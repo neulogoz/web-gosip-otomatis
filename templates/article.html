@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <meta name="description" content="{{DESCRIPTION}}">
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; line-height: 1.6; }
+        img { max-width: 100%; border-radius: 8px; }
+        .ad-container { margin: 20px 0; text-align: center; background: #f4f4f4; padding: 10px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{TITLE}}</h1>
+    </header>
+    
+    <!-- SLOT IKLAN ADSTERRA 1 -->
+    <div class="ad-container">
+        <!-- Letakkan Script Adsterra Anda di sini -->
+    </div>
+
+    <main>
+        <img src="{{IMAGE_URL}}" alt="{{TITLE}}">
+        <article>
+            {{CONTENT}}
+        </article>
+    </main>
+
+    <!-- SLOT IKLAN ADSTERRA 2 -->
+    <div class="ad-container">
+        <!-- Letakkan Script Adsterra Anda di sini -->
+    </div>
+</body>
+</html>
