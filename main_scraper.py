@@ -1,143 +1,224 @@
-import httpx
-import feedparser
-from bs4 import BeautifulSoup
-from google import genai
 import os
-import re
-from datetime import datetime
 import random
+import re
+import glob
+import feedparser
+import httpx
+import xml.etree.ElementTree as ET
+from datetime import datetime
+import google.generativeai as genai
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Konfigurasi Gemini API
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel('gemini-1.5-flash')
 
+# Daftar RSS Feed Gosip/Hiburan
 RSS_URLS = [
+    "https://www.insertlive.com/rss",
+    "https://www.detik.com/hot/rss",
     "https://www.suara.com/rss/entertainment",
-    "https://www.tribunnews.com/seleb/rss",
-    "https://www.viva.co.id/showbiz/rss",
-    "https://www.kapanlagi.com/feed/"
+    "https://www.liputan6.com/rss/showbiz"
 ]
 
-def bersihkan_judul(judul):
-    slug = re.sub(r'[^a-zA-Z0-9\s]', '', judul).strip().replace(' ', '-')
-    return slug.lower()
+def ekstrak_gambar(entry):
+    if 'media_content' in entry:
+        return entry.media_content[0]['url']
+    elif 'links' in entry:
+        for link in entry.links:
+            if link.get('type', '').startswith('image/'):
+                return link.href
+    return "https://via.placeholder.com/800x450?text=HotDeals+Gosip"
 
-def ambil_konten_artikel(url):
+def dapatkan_google_trends():
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = httpx.get(url, headers=headers, timeout=15.0)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=ID"
+        response = httpx.get(url, timeout=10.0)
+        root = ET.fromstring(response.text)
         
-        paragraphs = soup.find_all('p') 
-        konten = " ".join([p.text for p in paragraphs if len(p.text) > 50])
-        return konten
+        trends = []
+        # Mengambil 5 keyword paling trending hari ini
+        for item in root.findall('.//item')[:5]:
+            title = item.find('title').text
+            trends.append(title)
+            
+        return ", ".join(trends)
     except Exception as e:
-        print(f"Gagal mengambil artikel dari {url}: {e}")
-        return ""
+        print(f"Gagal mengambil tren: {e}")
+        return "gosip viral, artis indonesia terkini, berita selebritis"
 
 def rewrite_dengan_gemini(teks_asli):
-    prompt = f"""
-    Tulis ulang teks berita gosip berikut dengan gaya bahasa gaul, asik, ala akun gosip Indonesia. 
-    Ubah judulnya menjadi sedikit clickbait namun tetap sesuai fakta.
-    Format output harus HTML (gunakan tag <p>, <h2>, <strong> dll).
-    Jangan beri tag <html> atau <body>, cukup isi artikelnya saja. Pisahkan Judul dan Isi.
+    kata_kunci_trending = dapatkan_google_trends()
     
-    Teks asli:
-    {teks_asli}
-    
-    Format balasan (harus sama persis struktur ini):
-    JUDUL: [Judul Baru]
-    KONTEN: 
-    [Isi Artikel HTML]
-    """
-    
-    # KITA GUNAKAN VERSI TERBARU YANG DIMINTA GOOGLE
-    model_pilihan = ['gemini-3.6-flash', 'gemini-3.8-flash']
-    
-    for nama_model in model_pilihan:
-        try:
-            response = client.models.generate_content(
-                model=nama_model,
-                contents=prompt
-            )
-            hasil = response.text
+    try:
+        prompt = f"""
+        Tulis ulang artikel/berita hiburan berikut ini.
+        
+        ATURAN SANGAT PENTING:
+        1. DILARANG KERAS menggunakan emoji apapun (jangan pakai 🎉, ✨, 👇, 💔 dll).
+        2. Gaya bahasa natural, profesional, ala portal berita DetikHot atau InsertLive.
+        3. Langsung ke isi berita, tanpa kata pengantar AI.
+        4. Buat 1 judul yang clickbait, menarik, masuk akal.
+        5. Pisahkan judul dan isi berita persis dengan tanda "---".
+        6. ATURAN SEO: Sisipkan beberapa kata kunci trending berikut ini secara halus dan natural ke dalam paragraf artikel Anda: {kata_kunci_trending}.
+        
+        Artikel asli:
+        {teks_asli}
+        """
+        
+        response = model.generate_content(prompt)
+        teks_hasil = response.text.strip()
+        
+        if "---" in teks_hasil:
+            bagian = teks_hasil.split("---", 1)
+            judul = bagian[0].strip().replace('"', '').replace('*', '')
+            konten = bagian[1].strip()
             
-            judul = hasil.split('KONTEN:')[0].replace('JUDUL:', '').strip()
-            konten = hasil.split('KONTEN:')[1].strip()
-            konten = konten.replace('```html', '').replace('```', '')
-            return judul, konten
-            
-        except Exception as e:
-            print(f"-> Gagal model {nama_model}. Alasan dari Google: {str(e)}")
-            continue 
-            
-    print("Error fatal: Semua percobaan model gagal.")
-    return None, None
+            # Ubah konten agar memiliki format paragraf HTML
+            konten_html = ""
+            for paragraf in konten.split('\n\n'):
+                if paragraf.strip():
+                    konten_html += f"<p>{paragraf.strip()}</p>\n"
+                    
+            return judul, konten_html
+        return None, None
+    except Exception as e:
+        print(f"Error Gemini: {e}")
+        return None, None
+
+def bersihkan_judul(judul):
+    judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
+    return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug):
-    try:
-        with open('templates/article.html', 'r', encoding='utf-8') as f:
-            template = f.read()
+    html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{judul}</title>
+    <meta name="description" content="{judul} - Berita artis terhangat hari ini.">
+    <style>
+        :root {{ --primary: #e63946; --bg: #f3f4f6; --text: #374151; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); line-height: 1.7; margin: 0; padding: 0; }}
+        header {{ background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+        header a {{ text-decoration: none; color: var(--primary); font-size: 24px; font-weight: 800; letter-spacing: -0.5px; text-transform: uppercase; }}
+        .container {{ max-width: 680px; margin: 25px auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); }}
+        h1 {{ font-size: 28px; line-height: 1.35; margin-top: 0; margin-bottom: 15px; color: #111; letter-spacing: -0.5px; }}
+        .meta {{ font-size: 14px; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 25px; }}
+        .hero-img {{ width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; object-fit: cover; aspect-ratio: 16/9; background-color: #eee; }}
+        .content {{ font-size: 17px; color: #4b5563; }}
+        .content p {{ margin-bottom: 20px; }}
+        footer {{ text-align: center; padding: 20px; font-size: 13px; color: #9ca3af; margin-top: 20px; }}
+        @media (max-width: 600px) {{ .container {{ margin: 15px; padding: 20px; }} h1 {{ font-size: 24px; }} }}
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/">HotDeals Gosip</a>
+    </header>
+    
+    <main class="container">
         
-        html_final = template.replace('{{TITLE}}', judul).replace('{{DESCRIPTION}}', konten[:150] + "...").replace('{{IMAGE_URL}}', image_url).replace('{{CONTENT}}', konten)
+        <!-- PASTE KODE IKLAN BANNER ADSTERRA ANDA TEPAT DI BAWAH BARIS INI -->
+    <script>
+  atOptions = {
+    'key' : '34e8a8453e65d906ec3b64040798743a',
+    'format' : 'iframe',
+    'height' : 50,
+    'width' : 320,
+    'params' : {}
+  };
+</script>
+<script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         
-        filepath = f"content/{slug}.html"
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(html_final)
-        print(f"Sukses membuat halaman: {filepath}")
-    except Exception as e:
-        print(f"Gagal membuat file HTML: {e}")
 
-def ekstrak_gambar(entry):
-    if 'media_content' in entry and len(entry.media_content) > 0:
-        return entry.media_content[0]['url']
-    elif 'enclosures' in entry and len(entry.enclosures) > 0:
-        return entry.enclosures[0]['href']
-    elif 'summary' in entry:
-        soup = BeautifulSoup(entry.summary, 'html.parser')
-        img = soup.find('img')
-        if img and img.has_attr('src'):
-            return img['src']
-    return "https://via.placeholder.com/600x400?text=Berita+Gosip+Terbaru"
+        <h1>{judul}</h1>
+        <div class="meta">Dipublikasikan otomatis | Redaksi HotDeals</div>
+        
+        <img src="{image_url}" alt="Gambar Berita" class="hero-img">
+        
+        <div class="content">
+            {konten}
+        </div>
+        
+        <!-- PASTE KODE IKLAN BANNER KEDUA ANDA TEPAT DI BAWAH BARIS INI -->
+        <script>
+  atOptions = {
+    'key' : '34e8a8453e65d906ec3b64040798743a',
+    'format' : 'iframe',
+    'height' : 50,
+    'width' : 320,
+    'params' : {}
+  };
+</script>
+<script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
+
+    </main>
+    
+    <footer>
+        &copy; 2026 HotDealsCPM.me - Portal Berita Hiburan Terkini.
+    </footer>
+    
+    <!-- PASTE KODE IKLAN POPUNDER ADSTERRA ANDA TEPAT DI BAWAH BARIS INI (SEBELUM /BODY) -->
+    <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
+    
+</body>
+</html>"""
+    
+    filepath = f"content/{slug}.html"
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(html)
 
 def buat_index_html():
-    import glob
-    html = """
-    <!DOCTYPE html>
-    <html lang="id">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Berita Gosip Terbaru</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
-            li { margin-bottom: 15px; font-size: 18px; }
-            a { text-decoration: none; color: #d32f2f; font-weight: bold; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <h1>🔥 Gosip Terpanas Hari Ini</h1>
-        <ul>
-    """
+    html = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotDeals Gosip - Berita Terkini</title>
+    <style>
+        :root { --primary: #e63946; --bg: #f3f4f6; --text: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
+        header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        header h2 { margin: 0; font-size: 24px; color: var(--primary); font-weight: 800; letter-spacing: -0.5px; text-transform: uppercase; }
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
+        .section-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #111; display: flex; align-items: center; gap: 8px; }
+        .grid { display: flex; flex-direction: column; gap: 12px; }
+        .card { background: #fff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border-left: 4px solid var(--primary); transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+        .card a { text-decoration: none; color: #1f2937; font-size: 17px; font-weight: 600; line-height: 1.4; display: block; }
+        .card a:hover { color: var(--primary); }
+        footer { text-align: center; padding: 30px 20px; font-size: 13px; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>HotDeals Gosip</h2>
+    </header>
+    <div class="container">
+        <div class="section-title">Berita Terkini</div>
+        <div class="grid">
+"""
     
     for filepath in glob.glob("content/*.html"):
         filename = os.path.basename(filepath)
         if filename == "index.html":
             continue
         slug = filename.replace('.html', '')
-        # Mengubah slug kembali menjadi judul yang bisa dibaca
         judul_tampil = slug.replace('-', ' ').title()
-        html += f"<li><a href='/{slug}'>{judul_tampil}</a></li>\n"
+        html += f'            <div class="card"><a href="/{slug}">{judul_tampil}</a></div>\n'
         
-    html += """
-        </ul>
-    </body>
-    </html>
-    """
+    html += """        </div>
+    </div>
+    <footer>&copy; 2026 HotDealsCPM.me - Portal Berita Hiburan.</footer>
+</body>
+</html>
+"""
     
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("Sukses memperbarui halaman depan (index.html)")
+    print("Sukses memperbarui halaman depan.")
+
 def jalankan_bot():
     print(f"Memulai bot AGC pada {datetime.now()}")
     
@@ -150,26 +231,29 @@ def jalankan_bot():
             break
             
         print(f"Mengekstrak RSS: {rss}")
-        feed = feedparser.parse(rss)
-        
-        for entry in feed.entries[:2]:
-            if total_artikel_dibuat >= batas_artikel:
-                break
-                
-            url = entry.link
-            image_url = ekstrak_gambar(entry)
-            teks_asli = ambil_konten_artikel(url)
+        try:
+            feed = feedparser.parse(rss)
             
-            if len(teks_asli) > 300: 
-                print(f"Memproses judul: {entry.title}")
-                judul_baru, konten_baru = rewrite_dengan_gemini(teks_asli)
+            for entry in feed.entries[:2]:
+                if total_artikel_dibuat >= batas_artikel:
+                    break
+                    
+                image_url = ekstrak_gambar(entry)
                 
-                if judul_baru and konten_baru:
-                    slug = bersihkan_judul(judul_baru)
-                    buat_halaman_html(judul_baru, konten_baru, image_url, slug)
-                    total_artikel_dibuat += 1
+                teks_mentah = entry.get('description', '') or entry.get('summary', '') or entry.title
+                teks_asli = re.sub(r'<[^>]+>', '', teks_mentah) 
+                
+                if len(teks_asli) > 40: 
+                    print(f"Memproses judul: {entry.title}")
+                    judul_baru, konten_baru = rewrite_dengan_gemini(teks_asli)
+                    
+                    if judul_baru and konten_baru:
+                        slug = bersihkan_judul(judul_baru)
+                        buat_halaman_html(judul_baru, konten_baru, image_url, slug)
+                        total_artikel_dibuat += 1
+        except Exception as e:
+            print(f"Error memproses {rss}: {e}")
 
-    # Robot akan membuat halaman depan (Daftar Isi) setelah semua berita selesai diproses
     buat_index_html()
 
 if __name__ == "__main__":
