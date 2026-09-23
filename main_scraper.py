@@ -51,22 +51,31 @@ def rewrite_dengan_gemini(teks_asli):
     KONTEN: 
     [Isi Artikel HTML]
     """
-    try:
-        # Pemanggilan API menggunakan format model terbaru
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt
-        )
-        hasil = response.text
-        
-        judul = hasil.split('KONTEN:')[0].replace('JUDUL:', '').strip()
-        konten = hasil.split('KONTEN:')[1].strip()
-        
-        konten = konten.replace('```html', '').replace('```', '')
-        return judul, konten
-    except Exception as e:
-        print(f"Error Gemini API: {e}")
-        return None, None
+    
+    # Fitur baru: Mencoba beberapa model dari yang paling baru
+    model_pilihan = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-pro']
+    
+    for nama_model in model_pilihan:
+        try:
+            # Mencoba menulis berita dengan model yang tersedia
+            response = client.models.generate_content(
+                model=nama_model,
+                contents=prompt
+            )
+            hasil = response.text
+            
+            judul = hasil.split('KONTEN:')[0].replace('JUDUL:', '').strip()
+            konten = hasil.split('KONTEN:')[1].strip()
+            
+            konten = konten.replace('```html', '').replace('```', '')
+            return judul, konten
+            
+        except Exception as e:
+            print(f"-> Info: Gagal menggunakan model {nama_model}, mencoba versi lain...")
+            continue # Jika error (404), abaikan dan lanjut ke model berikutnya
+            
+    print("Error fatal: Semua model Gemini gagal diakses.")
+    return None, None
 
 def buat_halaman_html(judul, konten, image_url, slug):
     try:
