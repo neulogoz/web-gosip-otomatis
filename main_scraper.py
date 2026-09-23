@@ -36,7 +36,6 @@ def dapatkan_google_trends():
         root = ET.fromstring(response.text)
         
         trends = []
-        # Mengambil 5 keyword paling trending hari ini
         for item in root.findall('.//item')[:5]:
             title = item.find('title').text
             trends.append(title)
@@ -73,7 +72,6 @@ def rewrite_dengan_gemini(teks_asli):
             judul = bagian[0].strip().replace('"', '').replace('*', '')
             konten = bagian[1].strip()
             
-            # Ubah konten agar memiliki format paragraf HTML
             konten_html = ""
             for paragraf in konten.split('\n\n'):
                 if paragraf.strip():
@@ -90,26 +88,27 @@ def bersihkan_judul(judul):
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug):
-    html = f"""<!DOCTYPE html>
+    # Menggunakan string biasa (bukan f-string) agar script iklan JS tidak error
+    html_template = """<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{judul}</title>
-    <meta name="description" content="{judul} - Berita artis terhangat hari ini.">
+    <title>[JUDUL]</title>
+    <meta name="description" content="[JUDUL] - Berita artis terhangat hari ini.">
     <style>
-        :root {{ --primary: #e63946; --bg: #f3f4f6; --text: #374151; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); line-height: 1.7; margin: 0; padding: 0; }}
-        header {{ background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-        header a {{ text-decoration: none; color: var(--primary); font-size: 24px; font-weight: 800; letter-spacing: -0.5px; text-transform: uppercase; }}
-        .container {{ max-width: 680px; margin: 25px auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); }}
-        h1 {{ font-size: 28px; line-height: 1.35; margin-top: 0; margin-bottom: 15px; color: #111; letter-spacing: -0.5px; }}
-        .meta {{ font-size: 14px; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 25px; }}
-        .hero-img {{ width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; object-fit: cover; aspect-ratio: 16/9; background-color: #eee; }}
-        .content {{ font-size: 17px; color: #4b5563; }}
-        .content p {{ margin-bottom: 20px; }}
-        footer {{ text-align: center; padding: 20px; font-size: 13px; color: #9ca3af; margin-top: 20px; }}
-        @media (max-width: 600px) {{ .container {{ margin: 15px; padding: 20px; }} h1 {{ font-size: 24px; }} }}
+        :root { --primary: #e63946; --bg: #f3f4f6; --text: #374151; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); line-height: 1.7; margin: 0; padding: 0; }
+        header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        header a { text-decoration: none; color: var(--primary); font-size: 24px; font-weight: 800; letter-spacing: -0.5px; text-transform: uppercase; }
+        .container { max-width: 680px; margin: 25px auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); }
+        h1 { font-size: 28px; line-height: 1.35; margin-top: 0; margin-bottom: 15px; color: #111; letter-spacing: -0.5px; }
+        .meta { font-size: 14px; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 25px; }
+        .hero-img { width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; object-fit: cover; aspect-ratio: 16/9; background-color: #eee; }
+        .content { font-size: 17px; color: #4b5563; }
+        .content p { margin-bottom: 20px; }
+        footer { text-align: center; padding: 20px; font-size: 13px; color: #9ca3af; margin-top: 20px; }
+        @media (max-width: 600px) { .container { margin: 15px; padding: 20px; } h1 { font-size: 24px; } }
     </style>
 </head>
 <body>
@@ -119,39 +118,42 @@ def buat_halaman_html(judul, konten, image_url, slug):
     
     <main class="container">
         
-        <!-- PASTE KODE IKLAN BANNER ADSTERRA ANDA TEPAT DI BAWAH BARIS INI -->
-    <script>
-  atOptions = {
-    'key' : '34e8a8453e65d906ec3b64040798743a',
-    'format' : 'iframe',
-    'height' : 50,
-    'width' : 320,
-    'params' : {}
-  };
-</script>
-<script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
-        
+        <!-- IKLAN BANNER ATAS -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <script>
+              atOptions = {
+                'key' : '34e8a8453e65d906ec3b64040798743a',
+                'format' : 'iframe',
+                'height' : 50,
+                'width' : 320,
+                'params' : {}
+              };
+            </script>
+            <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
+        </div>
 
-        <h1>{judul}</h1>
+        <h1>[JUDUL]</h1>
         <div class="meta">Dipublikasikan otomatis | Redaksi HotDeals</div>
         
-        <img src="{image_url}" alt="Gambar Berita" class="hero-img">
+        <img src="[IMAGE_URL]" alt="Gambar Berita" class="hero-img">
         
         <div class="content">
-            {konten}
+            [KONTEN]
         </div>
         
-        <!-- PASTE KODE IKLAN BANNER KEDUA ANDA TEPAT DI BAWAH BARIS INI -->
-        <script>
-  atOptions = {
-    'key' : '34e8a8453e65d906ec3b64040798743a',
-    'format' : 'iframe',
-    'height' : 50,
-    'width' : 320,
-    'params' : {}
-  };
-</script>
-<script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
+        <!-- IKLAN BANNER BAWAH -->
+        <div style="text-align: center; margin-top: 20px;">
+            <script>
+              atOptions = {
+                'key' : '34e8a8453e65d906ec3b64040798743a',
+                'format' : 'iframe',
+                'height' : 50,
+                'width' : 320,
+                'params' : {}
+              };
+            </script>
+            <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
+        </div>
 
     </main>
     
@@ -159,15 +161,16 @@ def buat_halaman_html(judul, konten, image_url, slug):
         &copy; 2026 HotDealsCPM.me - Portal Berita Hiburan Terkini.
     </footer>
     
-    <!-- PASTE KODE IKLAN POPUNDER ADSTERRA ANDA TEPAT DI BAWAH BARIS INI (SEBELUM /BODY) -->
+    <!-- IKLAN POPUNDER BAWAH -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
-    
 </body>
 </html>"""
     
+    html_final = html_template.replace("[JUDUL]", judul).replace("[IMAGE_URL]", image_url).replace("[KONTEN]", konten)
+    
     filepath = f"content/{slug}.html"
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(html)
+        f.write(html_final)
 
 def buat_index_html():
     html = """<!DOCTYPE html>
@@ -214,10 +217,8 @@ def buat_index_html():
 </body>
 </html>
 """
-    
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("Sukses memperbarui halaman depan.")
 
 def jalankan_bot():
     print(f"Memulai bot AGC pada {datetime.now()}")
