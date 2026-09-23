@@ -99,6 +99,45 @@ def ekstrak_gambar(entry):
             return img['src']
     return "https://via.placeholder.com/600x400?text=Berita+Gosip+Terbaru"
 
+def buat_index_html():
+    import glob
+    html = """
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Berita Gosip Terbaru</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+            li { margin-bottom: 15px; font-size: 18px; }
+            a { text-decoration: none; color: #d32f2f; font-weight: bold; }
+            a:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body>
+        <h1>🔥 Gosip Terpanas Hari Ini</h1>
+        <ul>
+    """
+    
+    for filepath in glob.glob("content/*.html"):
+        filename = os.path.basename(filepath)
+        if filename == "index.html":
+            continue
+        slug = filename.replace('.html', '')
+        # Mengubah slug kembali menjadi judul yang bisa dibaca
+        judul_tampil = slug.replace('-', ' ').title()
+        html += f"<li><a href='/{slug}'>{judul_tampil}</a></li>\n"
+        
+    html += """
+        </ul>
+    </body>
+    </html>
+    """
+    
+    with open("content/index.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("Sukses memperbarui halaman depan (index.html)")
 def jalankan_bot():
     print(f"Memulai bot AGC pada {datetime.now()}")
     
@@ -129,6 +168,9 @@ def jalankan_bot():
                     slug = bersihkan_judul(judul_baru)
                     buat_halaman_html(judul_baru, konten_baru, image_url, slug)
                     total_artikel_dibuat += 1
+
+    # Robot akan membuat halaman depan (Daftar Isi) setelah semua berita selesai diproses
+    buat_index_html()
 
 if __name__ == "__main__":
     os.makedirs('content', exist_ok=True)
