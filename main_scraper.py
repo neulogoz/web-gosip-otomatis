@@ -38,19 +38,20 @@ def rewrite_dengan_gemini(teks_asli):
     prompt = f"""
     Tulis ulang teks berita gosip berikut dengan gaya bahasa gaul, asik, ala akun gosip Indonesia. 
     Ubah judulnya menjadi sedikit clickbait namun tetap sesuai fakta.
-    Format output harus HTML. Pisahkan Judul dan Isi.
+    Format output harus HTML (gunakan tag <p>, <h2>, <strong> dll).
+    Jangan beri tag <html> atau <body>, cukup isi artikelnya saja. Pisahkan Judul dan Isi.
     
     Teks asli:
     {teks_asli}
     
-    Format balasan:
+    Format balasan (harus sama persis struktur ini):
     JUDUL: [Judul Baru]
     KONTEN: 
     [Isi Artikel HTML]
     """
     
-    # Kita masukkan kembali gemini-1.5-flash karena pada SDK terbaru, versi ini seharusnya didukung lagi
-    model_pilihan = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash']
+    # KITA GUNAKAN VERSI TERBARU YANG DIMINTA GOOGLE
+    model_pilihan = ['gemini-3.6-flash', 'gemini-3.8-flash']
     
     for nama_model in model_pilihan:
         try:
@@ -66,7 +67,6 @@ def rewrite_dengan_gemini(teks_asli):
             return judul, konten
             
         except Exception as e:
-            # DI SINI KITA AKAN MELIHAT ERROR ASLINYA DARI GOOGLE
             print(f"-> Gagal model {nama_model}. Alasan dari Google: {str(e)}")
             continue 
             
@@ -102,16 +102,6 @@ def ekstrak_gambar(entry):
 def jalankan_bot():
     print(f"Memulai bot AGC pada {datetime.now()}")
     
-    # --- FITUR DETEKTIF BARU ---
-    try:
-        print("Mengecek daftar model AI yang diizinkan untuk API Key Anda...")
-        models = client.models.list()
-        tersedia = [m.name for m in models if 'flash' in m.name or 'pro' in m.name]
-        print(f"Model yang aktif di akun Anda: {tersedia}")
-    except Exception as e:
-        print(f"Gagal mengecek daftar model: {str(e)}")
-    # ---------------------------
-
     random.shuffle(RSS_URLS)
     total_artikel_dibuat = 0
     batas_artikel = 4 
