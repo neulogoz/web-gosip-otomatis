@@ -7,11 +7,9 @@ import re
 from datetime import datetime
 import random
 
-# Konfigurasi Gemini API menggunakan sistem TERBARU (google-genai)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 4 Sumber RSS Berita Gosip/Hiburan Indonesia
 RSS_URLS = [
     "https://www.suara.com/rss/entertainment",
     "https://www.tribunnews.com/seleb/rss",
@@ -40,24 +38,22 @@ def rewrite_dengan_gemini(teks_asli):
     prompt = f"""
     Tulis ulang teks berita gosip berikut dengan gaya bahasa gaul, asik, ala akun gosip Indonesia. 
     Ubah judulnya menjadi sedikit clickbait namun tetap sesuai fakta.
-    Format output harus HTML (gunakan tag <p>, <h2>, <strong> dll).
-    Jangan beri tag <html> atau <body>, cukup isi artikelnya saja. Pisahkan Judul dan Isi.
+    Format output harus HTML. Pisahkan Judul dan Isi.
     
     Teks asli:
     {teks_asli}
     
-    Format balasan (harus sama persis struktur ini):
+    Format balasan:
     JUDUL: [Judul Baru]
     KONTEN: 
     [Isi Artikel HTML]
     """
     
-    # Fitur baru: Mencoba beberapa model dari yang paling baru
-    model_pilihan = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-pro']
+    # Kita masukkan kembali gemini-1.5-flash karena pada SDK terbaru, versi ini seharusnya didukung lagi
+    model_pilihan = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash']
     
     for nama_model in model_pilihan:
         try:
-            # Mencoba menulis berita dengan model yang tersedia
             response = client.models.generate_content(
                 model=nama_model,
                 contents=prompt
@@ -66,15 +62,15 @@ def rewrite_dengan_gemini(teks_asli):
             
             judul = hasil.split('KONTEN:')[0].replace('JUDUL:', '').strip()
             konten = hasil.split('KONTEN:')[1].strip()
-            
             konten = konten.replace('```html', '').replace('```', '')
             return judul, konten
             
         except Exception as e:
-            print(f"-> Info: Gagal menggunakan model {nama_model}, mencoba versi lain...")
-            continue # Jika error (404), abaikan dan lanjut ke model berikutnya
+            # DI SINI KITA AKAN MELIHAT ERROR ASLINYA DARI GOOGLE
+            print(f"-> Gagal model {nama_model}. Alasan dari Google: {str(e)}")
+            continue 
             
-    print("Error fatal: Semua model Gemini gagal diakses.")
+    print("Error fatal: Semua percobaan model gagal.")
     return None, None
 
 def buat_halaman_html(judul, konten, image_url, slug):
@@ -82,10 +78,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
         with open('templates/article.html', 'r', encoding='utf-8') as f:
             template = f.read()
         
-        html_final = template.replace('{{TITLE}}', judul)
-        html_final = html_final.replace('{{DESCRIPTION}}', konten[:150] + "...") 
-        html_final = html_final.replace('{{IMAGE_URL}}', image_url)
-        html_final = html_final.replace('{{CONTENT}}', konten)
+        html_final = template.replace('{{TITLE}}', judul).replace('{{DESCRIPTION}}', konten[:150] + "...").replace('{{IMAGE_URL}}', image_url).replace('{{CONTENT}}', konten)
         
         filepath = f"content/{slug}.html"
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -108,6 +101,17 @@ def ekstrak_gambar(entry):
 
 def jalankan_bot():
     print(f"Memulai bot AGC pada {datetime.now()}")
+    
+    # --- FITUR DETEKTIF BARU ---
+    try:
+        print("Mengecek daftar model AI yang diizinkan untuk API Key Anda...")
+        models = client.models.list()
+        tersedia = [m.name for m in models if 'flash' in m.name or 'pro' in m.name]
+        print(f"Model yang aktif di akun Anda: {tersedia}")
+    except Exception as e:
+        print(f"Gagal mengecek daftar model: {str(e)}")
+    # ---------------------------
+
     random.shuffle(RSS_URLS)
     total_artikel_dibuat = 0
     batas_artikel = 4 
