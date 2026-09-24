@@ -53,12 +53,12 @@ def rewrite_dengan_gemini(teks_asli):
         Tulis ulang artikel/berita hiburan berikut ini.
         
         ATURAN SANGAT PENTING:
-        1. DILARANG KERAS menggunakan emoji apapun (jangan pakai 🎉, ✨, 👇, 💔 dll).
+        1. DILARANG KERAS menggunakan emoji apapun.
         2. Gaya bahasa natural, profesional, ala portal berita DetikHot atau InsertLive.
         3. Langsung ke isi berita, tanpa kata pengantar AI.
-        4. Buat 1 judul yang clickbait, menarik, masuk akal.
-        5. Pisahkan judul dan isi berita persis dengan tanda "---".
-        6. ATURAN SEO: Sisipkan beberapa kata kunci trending berikut ini secara halus dan natural ke dalam paragraf artikel Anda: {kata_kunci_trending}.
+        4. Baris PERTAMA wajib berisi Judul clickbait.
+        5. Baris KEDUA dan seterusnya adalah isi paragraf berita.
+        6. ATURAN SEO: Sisipkan kata kunci trending berikut ini secara natural ke dalam berita: {kata_kunci_trending}.
         
         Artikel asli:
         {teks_asli}
@@ -67,13 +67,15 @@ def rewrite_dengan_gemini(teks_asli):
         response = model.generate_content(prompt)
         teks_hasil = response.text.strip()
         
-        if "---" in teks_hasil:
-            bagian = teks_hasil.split("---", 1)
-            judul = bagian[0].strip().replace('"', '').replace('*', '')
-            konten = bagian[1].strip()
+        # Mengambil baris pertama sebagai Judul, sisanya sebagai Konten
+        baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
+        
+        if len(baris_teks) > 1:
+            judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
+            konten = '\n'.join(baris_teks[1:])
             
             konten_html = ""
-            for paragraf in konten.split('\n\n'):
+            for paragraf in konten.split('\n'):
                 if paragraf.strip():
                     konten_html += f"<p>{paragraf.strip()}</p>\n"
                     
@@ -82,6 +84,7 @@ def rewrite_dengan_gemini(teks_asli):
     except Exception as e:
         print(f"Error Gemini: {e}")
         return None, None
+
 
 def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
