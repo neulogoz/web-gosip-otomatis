@@ -3,21 +3,16 @@ import random
 import re
 import glob
 import feedparser
+import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
-import google.generativeai as genai
 from curl_cffi import requests as cffi_requests
 
-# Konfigurasi Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Menggunakan Portal Berita yang Ramah terhadap RSS Aggregator
+# Sumber Berita yang Ramah RSS Aggregator (KapanLagi terbukti tembus 84 artikel!)
 RSS_URLS = [
-    "https://www.tribunnews.com/seleb/rss",
     "https://www.kapanlagi.com/feed/",
-    "https://www.viva.co.id/api/feed/showbiz",
-    "https://www.jpnn.com/rss/entertainment"
+    "https://www.antaranews.com/rss/hiburan",
+    "https://daerah.sindonews.com/rss"
 ]
 
 def ekstrak_gambar(entry):
@@ -27,7 +22,6 @@ def ekstrak_gambar(entry):
         for link in entry.links:
             if link.get('type', '').startswith('image/'):
                 return link.href
-    # Fallback gambar jika tidak ada
     return "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=800&q=80"
 
 def dapatkan_google_trends():
@@ -42,45 +36,59 @@ def dapatkan_google_trends():
 
 def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
-    try:
-        prompt = f"""
-        Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang panjang dan utuh.
-        
-        ATURAN:
-        1. DILARANG KERAS menggunakan emoji.
-        2. Gaya bahasa natural, jurnalisme santai (minimal 3-4 paragraf panjang).
-        3. Baris PERTAMA wajib berisi Judul clickbait yang sangat menarik.
-        4. Baris KEDUA dan seterusnya adalah isi paragraf berita.
-        5. Sisipkan kata kunci trending berikut secara natural ke dalam cerita: {kata_kunci_trending}.
-        
-        Informasi/Fakta asli: {teks_asli}
-        """
-        
-        pengaturan_sensor = [
+    api_key = os.getenv("GEMINI_API_KEY")
+    
+    prompt = f"""
+    Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang panjang dan utuh.
+    
+    ATURAN:
+    1. DILARANG KERAS menggunakan emoji.
+    2. Gaya bahasa natural, jurnalisme santai (minimal 3 paragraf panjang).
+    3. Baris PERTAMA wajib berisi Judul clickbait yang sangat menarik.
+    4. Baris KEDUA dan seterusnya adalah isi paragraf berita.
+    5. Sisipkan kata kunci trending berikut secara natural ke dalam cerita: {kata_kunci_trending}.
+    
+    Informasi asli: {teks_asli}
+    """
+    
+    # MENGGUNAKAN JALUR LANGSUNG (REST API) - Anti Error Modul Google
+    # Kita menggunakan model gemini-2.0-flash yang aktif
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
+    }
+    
+    try:
+        print("    -> Sedang meminta AI meracik artikel via Jalur Langsung...")
+        # Tembak API langsung menggunakan httpx
+        response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
+        data = response.json()
         
-        print("    -> Sedang meminta AI meracik artikel...")
-        response = model.generate_content(prompt, safety_settings=pengaturan_sensor)
-        teks_hasil = response.text.strip()
-        
-        baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
-        
-        if len(baris_teks) > 1:
-            judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
-            konten = '\n'.join(baris_teks[1:])
+        if "candidates" in data:
+            teks_hasil = data["candidates"][0]["content"]["parts"][0]["text"].strip()
             
-            konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in konten.split('\n') if p.strip()])
-            print("    -> AI BERHASIL menulis artikel!")
-            return judul, konten_html
-        else:
-            print("    -> [!] AI menjawab terlalu pendek.")
-            return None, None
+            baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
+            
+            if len(baris_teks) > 1:
+                judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
+                konten = '\n'.join(baris_teks[1:])
+                
+                konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in konten.split('\n') if p.strip()])
+                print("    -> AI BERHASIL menulis artikel!")
+                return judul, konten_html
+        
+        print(f"    -> [!] AI menolak menjawab. Info: {data.get('error', 'Tidak diketahui')}")
+        return None, None
+        
     except Exception as e:
-        print(f"    -> [!] ERROR AI GEMINI: {e}")
+        print(f"    -> [!] ERROR KONEKSI GEMINI: {e}")
         return None, None
 
 def bersihkan_judul(judul):
@@ -179,27 +187,25 @@ def jalankan_bot():
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
-            print(f"    Status HTTP: {response.status_code}")
             
             feed = feedparser.parse(response.content)
             print(f"    Ditemukan {len(feed.entries)} berita.")
             
-            for entry in feed.entries[:3]: # Mengambil 3 teratas per sumber
+            for entry in feed.entries[:3]:
                 if total_artikel_dibuat >= batas_artikel: break
                 
                 print(f"  - Judul Asli: {entry.title}")
                 teks_mentah = entry.get('description', '') or entry.get('summary', '') or entry.title
                 teks_asli = re.sub(r'<[^>]+>', '', teks_mentah) 
                 
-                # Syarat karakter diturunkan ke 10 karena Gemini sekarang akan mengembangkan ceritanya
                 if len(teks_asli) > 10: 
-                    judul_baru, konten_baru = rewrite_dengan_gemini(f"Judul: {entry.title}. Keterangan: {teks_asli}")
+                    judul_baru, konten_baru = rewrite_dengan_gemini(f"Judul: {entry.title}. Fakta: {teks_asli}")
                     if judul_baru and konten_baru:
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
                 else:
-                    print("    -> [LEWAT] Teks dari sumber kosong.")
+                    print("    -> [LEWAT] Teks kosong.")
         except Exception as e:
             print(f"[!] Error saat memproses {rss}: {e}")
 
