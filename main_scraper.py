@@ -12,12 +12,12 @@ from curl_cffi import requests as cffi_requests
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Jalur RSS resmi portal berita
+# Menggunakan Portal Berita yang Ramah terhadap RSS Aggregator
 RSS_URLS = [
-    "https://rss.detik.com/index.php/hot",
-    "https://www.insertlive.com/rss",
-    "https://www.suara.com/rss/entertainment",
-    "https://www.liputan6.com/rss/showbiz"
+    "https://www.tribunnews.com/seleb/rss",
+    "https://www.kapanlagi.com/feed/",
+    "https://www.viva.co.id/api/feed/showbiz",
+    "https://www.jpnn.com/rss/entertainment"
 ]
 
 def ekstrak_gambar(entry):
@@ -27,36 +27,35 @@ def ekstrak_gambar(entry):
         for link in entry.links:
             if link.get('type', '').startswith('image/'):
                 return link.href
-    return "https://via.placeholder.com/800x450?text=HotDeals+Gosip"
+    # Fallback gambar jika tidak ada
+    return "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=800&q=80"
 
 def dapatkan_google_trends():
     try:
         url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=ID"
-        # Gunakan curl_cffi agar stabil
         response = cffi_requests.get(url, impersonate="chrome110", timeout=10.0)
         root = ET.fromstring(response.content)
         trends = [item.find('title').text for item in root.findall('.//item')[:5]]
         return ", ".join(trends)
     except Exception as e:
-        print(f"[!] Gagal Google Trends: {e}")
-        return "gosip viral, artis indonesia"
+        return "gosip selebriti, artis viral, berita hiburan"
 
 def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
     try:
         prompt = f"""
-        Tulis ulang artikel/berita hiburan berikut ini.
-        ATURAN:
-        1. TANPA EMOJI.
-        2. Gaya bahasa natural ala portal berita.
-        3. Baris PERTAMA wajib berisi Judul clickbait.
-        4. Baris KEDUA dan seterusnya adalah isi paragraf.
-        5. Sisipkan kata kunci trending: {kata_kunci_trending}.
+        Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang panjang dan utuh.
         
-        Artikel asli: {teks_asli}
+        ATURAN:
+        1. DILARANG KERAS menggunakan emoji.
+        2. Gaya bahasa natural, jurnalisme santai (minimal 3-4 paragraf panjang).
+        3. Baris PERTAMA wajib berisi Judul clickbait yang sangat menarik.
+        4. Baris KEDUA dan seterusnya adalah isi paragraf berita.
+        5. Sisipkan kata kunci trending berikut secara natural ke dalam cerita: {kata_kunci_trending}.
+        
+        Informasi/Fakta asli: {teks_asli}
         """
         
-        # Sensor keamanan Gemini dimatikan
         pengaturan_sensor = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -64,7 +63,7 @@ def rewrite_dengan_gemini(teks_asli):
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
         
-        print("    -> Sedang meminta AI menulis artikel...")
+        print("    -> Sedang meminta AI meracik artikel...")
         response = model.generate_content(prompt, safety_settings=pengaturan_sensor)
         teks_hasil = response.text.strip()
         
@@ -89,7 +88,6 @@ def bersihkan_judul(judul):
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug):
-    # Template bebas error JavaScript (Adsterra Anda aman di sini)
     html_template = """<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -109,7 +107,6 @@ def buat_halaman_html(judul, konten, image_url, slug):
     <header><a href="/">HotDeals Gosip</a></header>
     <main class="container">
         
-        <!-- Iklan Banner Atas -->
         <div style="text-align: center; margin-bottom: 20px;">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -121,7 +118,6 @@ def buat_halaman_html(judul, konten, image_url, slug):
         <img src="[IMAGE_URL]" alt="Gambar Berita" class="hero-img">
         <div class="content">[KONTEN]</div>
         
-        <!-- Iklan Banner Bawah -->
         <div style="text-align: center; margin-top: 20px;">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -129,8 +125,6 @@ def buat_halaman_html(judul, konten, image_url, slug):
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
     </main>
-    
-    <!-- Iklan Popunder Adsterra -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
@@ -184,28 +178,28 @@ def jalankan_bot():
         if total_artikel_dibuat >= batas_artikel: break
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
-            # curl_cffi dengan impersonate Chrome 110 untuk membobol perlindungan Cloudflare
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
             print(f"    Status HTTP: {response.status_code}")
             
             feed = feedparser.parse(response.content)
             print(f"    Ditemukan {len(feed.entries)} berita.")
             
-            for entry in feed.entries[:2]:
+            for entry in feed.entries[:3]: # Mengambil 3 teratas per sumber
                 if total_artikel_dibuat >= batas_artikel: break
                 
                 print(f"  - Judul Asli: {entry.title}")
                 teks_mentah = entry.get('description', '') or entry.get('summary', '') or entry.title
                 teks_asli = re.sub(r'<[^>]+>', '', teks_mentah) 
                 
-                if len(teks_asli) > 20: 
-                    judul_baru, konten_baru = rewrite_dengan_gemini(teks_asli)
+                # Syarat karakter diturunkan ke 10 karena Gemini sekarang akan mengembangkan ceritanya
+                if len(teks_asli) > 10: 
+                    judul_baru, konten_baru = rewrite_dengan_gemini(f"Judul: {entry.title}. Keterangan: {teks_asli}")
                     if judul_baru and konten_baru:
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
                 else:
-                    print("    -> [LEWAT] Teks dari sumber terlalu pendek.")
+                    print("    -> [LEWAT] Teks dari sumber kosong.")
         except Exception as e:
             print(f"[!] Error saat memproses {rss}: {e}")
 
