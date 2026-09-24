@@ -38,15 +38,16 @@ def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
     api_key = os.getenv("GEMINI_API_KEY")
     
+    # PROMPT DIPERBARUI AGAR ARTIKEL LEBIH PANJANG (Ramah SEO & Adsterra)
     prompt = f"""
-    Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang panjang dan utuh.
+    Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang PANJANG dan utuh (minimal 5-7 paragraf).
     
     ATURAN:
     1. DILARANG KERAS menggunakan emoji.
-    2. Gaya bahasa natural, jurnalisme santai (minimal 3 paragraf panjang).
-    3. Baris PERTAMA wajib berisi Judul clickbait yang sangat menarik.
-    4. Baris KEDUA dan seterusnya adalah isi paragraf berita.
-    5. Sisipkan kata kunci trending berikut secara natural ke dalam cerita: {kata_kunci_trending}.
+    2. Gaya bahasa jurnalisme santai yang mengundang rasa penasaran pembaca.
+    3. Baris PERTAMA wajib berisi Judul clickbait yang sangat memancing.
+    4. Baris KEDUA dan seterusnya adalah isi berita. Berikan opini netral dan dramatisasi ala wartawan hiburan agar teks menjadi panjang.
+    5. Sisipkan kata kunci trending berikut secara natural: {kata_kunci_trending}.
     
     Informasi asli: {teks_asli}
     """
@@ -63,7 +64,6 @@ def rewrite_dengan_gemini(teks_asli):
         ]
     }
     
-    # SISTEM PANTANG MENYERAH (AUTO-RETRY MAKSIMAL 3 KALI)
     for percobaan in range(3):
         try:
             print(f"    -> Sedang meminta AI meracik artikel (Percobaan {percobaan + 1}/3)...")
@@ -84,9 +84,8 @@ def rewrite_dengan_gemini(teks_asli):
             error_msg = data.get('error', {}).get('message', 'Tidak diketahui')
             print(f"    -> [!] AI menolak: {error_msg}")
             
-            # Jika server sibuk (High Demand), tunggu 30 detik lalu coba lagi
             if "high demand" in error_msg.lower() or "503" in str(data):
-                print("    -> [SABAR] Server Google sedang padat. Menunggu 30 detik sebelum mencoba lagi...")
+                print("    -> [SABAR] Server Google sedang padat. Menunggu 30 detik...")
                 time.sleep(30)
                 continue
             else:
@@ -96,7 +95,6 @@ def rewrite_dengan_gemini(teks_asli):
             print(f"    -> [!] ERROR KONEKSI GEMINI: {e}")
             time.sleep(15)
             
-    print("    -> [GAGAL] Sudah dicoba 3 kali tapi server Google tetap sibuk. Lanjut ke berita lain.")
     return None, None
 
 def bersihkan_judul(judul):
@@ -175,7 +173,7 @@ def buat_index_html():
     
     for filepath in glob.glob("content/*.html"):
         filename = os.path.basename(filepath)
-        if filename != "index.html":
+        if filename != "index.html" and filename != "sitemap.xml":
             slug = filename.replace('.html', '')
             html += f'<div class="card"><a href="/{slug}">{slug.replace("-", " ").title()}</a></div>\n'
             
@@ -183,6 +181,42 @@ def buat_index_html():
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
     print("\n[OK] Index.html diperbarui.")
+
+# === FUNGSI BARU UNTUK SITEMAP XML ===
+def buat_sitemap_xml():
+    base_url = "https://hotdealscpm.me"
+    tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
+    
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    
+    # Halaman Utama (Homepage)
+    xml_content += '  <url>\n'
+    xml_content += f'    <loc>{base_url}/</loc>\n'
+    xml_content += f'    <lastmod>{tanggal_sekarang}</lastmod>\n'
+    xml_content += '    <changefreq>hourly</changefreq>\n'
+    xml_content += '    <priority>1.0</priority>\n'
+    xml_content += '  </url>\n'
+    
+    # Looping semua artikel untuk dimasukkan ke sitemap
+    for filepath in glob.glob("content/*.html"):
+        filename = os.path.basename(filepath)
+        if filename != "index.html" and filename != "sitemap.xml":
+            slug = filename.replace('.html', '')
+            xml_content += '  <url>\n'
+            # Di Github Pages, link menggunakan format /slug
+            xml_content += f'    <loc>{base_url}/{slug}</loc>\n'
+            xml_content += f'    <lastmod>{tanggal_sekarang}</lastmod>\n'
+            xml_content += '    <changefreq>daily</changefreq>\n'
+            xml_content += '    <priority>0.8</priority>\n'
+            xml_content += '  </url>\n'
+            
+    xml_content += '</urlset>'
+    
+    # Simpan di folder content agar ikut di-upload ke GitHub Pages
+    with open("content/sitemap.xml", "w", encoding="utf-8") as f:
+        f.write(xml_content)
+    print("[OK] Sitemap.xml berhasil dibuat dan diperbarui.")
 
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
@@ -212,8 +246,6 @@ def jalankan_bot():
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
-                        
-                        # Jeda antar artikel agar tidak kena Limit 429
                         print("    -> [JEDA AMAN] Istirahat 15 detik sebelum artikel berikutnya...")
                         time.sleep(15)
                 else:
@@ -222,6 +254,7 @@ def jalankan_bot():
             print(f"[!] Error saat memproses {rss}: {e}")
 
     buat_index_html()
+    buat_sitemap_xml() # <--- Memanggil fungsi sitemap di akhir
 
 if __name__ == "__main__":
     os.makedirs('content', exist_ok=True)
