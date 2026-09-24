@@ -7,14 +7,16 @@ import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import google.generativeai as genai
+from curl_cffi import requests as cffi_requests
 
 # Konfigurasi Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# URL RSS Detik diperbarui ke jalur resmi
 RSS_URLS = [
+    "https://rss.detik.com/index.php/hot",
     "https://www.insertlive.com/rss",
-    "https://www.detik.com/hot/rss",
     "https://www.suara.com/rss/entertainment",
     "https://www.liputan6.com/rss/showbiz"
 ]
@@ -172,17 +174,14 @@ def jalankan_bot():
     total_artikel_dibuat = 0
     batas_artikel = 4 
     
-    # TOPENG MANUSIA (User-Agent Google Chrome)
-    headers_penyamaran = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
     for rss in RSS_URLS:
         if total_artikel_dibuat >= batas_artikel: break
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
-            # Menggunakan httpx untuk menyamar, lalu diserahkan ke feedparser
-            response = httpx.get(rss, headers=headers_penyamaran, timeout=20.0, follow_redirects=True)
+            # Menggunakan curl_cffi dengan impersonate Chrome untuk tembus Cloudflare
+            response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
+            print(f"    Status HTTP: {response.status_code}")
+            
             feed = feedparser.parse(response.content)
             print(f"    Ditemukan {len(feed.entries)} berita.")
             
