@@ -66,6 +66,17 @@ def rewrite_dengan_gemini(teks_asli):
         
         response = model.generate_content(prompt)
         teks_hasil = response.text.strip()
+
+# Matikan sensor keamanan AI agar berita gosip/skandal tidak diblokir
+        pengaturan_sensor = {
+            'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
+            'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
+            'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+            'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
+        }
+        
+        response = model.generate_content(prompt, safety_settings=pengaturan_sensor)
+        teks_hasil = response.text.strip()
         
         # Mengambil baris pertama sebagai Judul, sisanya sebagai Konten
         baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
