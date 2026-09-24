@@ -3,7 +3,6 @@ import random
 import re
 import glob
 import feedparser
-import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import google.generativeai as genai
@@ -13,7 +12,7 @@ from curl_cffi import requests as cffi_requests
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# URL RSS Detik diperbarui ke jalur resmi
+# Jalur RSS resmi portal berita
 RSS_URLS = [
     "https://rss.detik.com/index.php/hot",
     "https://www.insertlive.com/rss",
@@ -33,8 +32,9 @@ def ekstrak_gambar(entry):
 def dapatkan_google_trends():
     try:
         url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=ID"
-        response = httpx.get(url, timeout=10.0)
-        root = ET.fromstring(response.text)
+        # Gunakan curl_cffi agar stabil
+        response = cffi_requests.get(url, impersonate="chrome110", timeout=10.0)
+        root = ET.fromstring(response.content)
         trends = [item.find('title').text for item in root.findall('.//item')[:5]]
         return ", ".join(trends)
     except Exception as e:
@@ -56,6 +56,7 @@ def rewrite_dengan_gemini(teks_asli):
         Artikel asli: {teks_asli}
         """
         
+        # Sensor keamanan Gemini dimatikan
         pengaturan_sensor = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -88,6 +89,7 @@ def bersihkan_judul(judul):
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug):
+    # Template bebas error JavaScript (Adsterra Anda aman di sini)
     html_template = """<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -100,13 +102,14 @@ def buat_halaman_html(judul, konten, image_url, slug):
         header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; }
         header a { text-decoration: none; color: var(--primary); font-size: 24px; font-weight: 800; }
         .container { max-width: 680px; margin: 25px auto; background: #fff; padding: 30px; border-radius: 10px; }
-        .hero-img { width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; }
+        .hero-img { width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; object-fit: cover; aspect-ratio: 16/9; }
     </style>
 </head>
 <body>
     <header><a href="/">HotDeals Gosip</a></header>
     <main class="container">
         
+        <!-- Iklan Banner Atas -->
         <div style="text-align: center; margin-bottom: 20px;">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -118,6 +121,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
         <img src="[IMAGE_URL]" alt="Gambar Berita" class="hero-img">
         <div class="content">[KONTEN]</div>
         
+        <!-- Iklan Banner Bawah -->
         <div style="text-align: center; margin-top: 20px;">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -125,6 +129,8 @@ def buat_halaman_html(judul, konten, image_url, slug):
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
     </main>
+    
+    <!-- Iklan Popunder Adsterra -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
@@ -178,7 +184,7 @@ def jalankan_bot():
         if total_artikel_dibuat >= batas_artikel: break
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
-            # Menggunakan curl_cffi dengan impersonate Chrome untuk tembus Cloudflare
+            # curl_cffi dengan impersonate Chrome 110 untuk membobol perlindungan Cloudflare
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
             print(f"    Status HTTP: {response.status_code}")
             
