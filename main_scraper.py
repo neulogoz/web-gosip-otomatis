@@ -2,14 +2,13 @@ import os
 import random
 import re
 import glob
-import time  # <-- Modul baru untuk memberikan jeda waktu
+import time
 import feedparser
 import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
 
-# Sumber Berita yang Ramah RSS Aggregator 
 RSS_URLS = [
     "https://www.kapanlagi.com/feed/",
     "https://www.antaranews.com/rss/hiburan",
@@ -64,30 +63,41 @@ def rewrite_dengan_gemini(teks_asli):
         ]
     }
     
-    try:
-        print("    -> Sedang meminta AI meracik artikel via Jalur Langsung...")
-        response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
-        data = response.json()
-        
-        if "candidates" in data:
-            teks_hasil = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    # SISTEM PANTANG MENYERAH (AUTO-RETRY MAKSIMAL 3 KALI)
+    for percobaan in range(3):
+        try:
+            print(f"    -> Sedang meminta AI meracik artikel (Percobaan {percobaan + 1}/3)...")
+            response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
+            data = response.json()
             
-            baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
-            
-            if len(baris_teks) > 1:
-                judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
-                konten = '\n'.join(baris_teks[1:])
+            if "candidates" in data:
+                teks_hasil = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
                 
-                konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in konten.split('\n') if p.strip()])
-                print("    -> AI BERHASIL menulis artikel!")
-                return judul, konten_html
-        
-        print(f"    -> [!] AI menolak menjawab. Info: {data.get('error', {}).get('message', 'Tidak diketahui')}")
-        return None, None
-        
-    except Exception as e:
-        print(f"    -> [!] ERROR KONEKSI GEMINI: {e}")
-        return None, None
+                if len(baris_teks) > 1:
+                    judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
+                    konten = '\n'.join(baris_teks[1:])
+                    konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in konten.split('\n') if p.strip()])
+                    print("    -> [BERHASIL] AI selesai menulis artikel!")
+                    return judul, konten_html
+            
+            error_msg = data.get('error', {}).get('message', 'Tidak diketahui')
+            print(f"    -> [!] AI menolak: {error_msg}")
+            
+            # Jika server sibuk (High Demand), tunggu 30 detik lalu coba lagi
+            if "high demand" in error_msg.lower() or "503" in str(data):
+                print("    -> [SABAR] Server Google sedang padat. Menunggu 30 detik sebelum mencoba lagi...")
+                time.sleep(30)
+                continue
+            else:
+                return None, None
+                
+        except Exception as e:
+            print(f"    -> [!] ERROR KONEKSI GEMINI: {e}")
+            time.sleep(15)
+            
+    print("    -> [GAGAL] Sudah dicoba 3 kali tapi server Google tetap sibuk. Lanjut ke berita lain.")
+    return None, None
 
 def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
@@ -185,7 +195,6 @@ def jalankan_bot():
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
-            
             feed = feedparser.parse(response.content)
             print(f"    Ditemukan {len(feed.entries)} berita.")
             
@@ -198,13 +207,15 @@ def jalankan_bot():
                 
                 if len(teks_asli) > 10: 
                     judul_baru, konten_baru = rewrite_dengan_gemini(f"Judul: {entry.title}. Fakta: {teks_asli}")
+                    
                     if judul_baru and konten_baru:
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
                         
-                    print("    -> [JEDA] Istirahat 15 detik agar tidak diblokir Google...")
-                    time.sleep(15)  # <-- INI KUNCI UTAMANYA
+                        # Jeda antar artikel agar tidak kena Limit 429
+                        print("    -> [JEDA AMAN] Istirahat 15 detik sebelum artikel berikutnya...")
+                        time.sleep(15)
                 else:
                     print("    -> [LEWAT] Teks kosong.")
         except Exception as e:
