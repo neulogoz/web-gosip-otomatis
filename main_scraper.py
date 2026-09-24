@@ -54,7 +54,6 @@ def rewrite_dengan_gemini(teks_asli):
         Artikel asli: {teks_asli}
         """
         
-        # Sensor dimatikan dengan format yang paling didukung
         pengaturan_sensor = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -135,14 +134,34 @@ def buat_halaman_html(judul, konten, image_url, slug):
     print(f"    -> [SUKSES] File {slug}.html berhasil disimpan!")
 
 def buat_index_html():
-    # Index sederhana untuk kecepatan testing
-    html = """<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Berita Terkini</title></head><body><h1>Berita Gosip</h1><ul>"""
+    html = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotDeals Gosip - Berita Terkini</title>
+    <style>
+        :root { --primary: #e63946; --bg: #f3f4f6; --text: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
+        header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        header h2 { margin: 0; font-size: 24px; color: var(--primary); font-weight: 800; text-transform: uppercase; }
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
+        .grid { display: flex; flex-direction: column; gap: 12px; }
+        .card { background: #fff; padding: 18px 20px; border-radius: 8px; border-left: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+        .card a { text-decoration: none; color: #1f2937; font-size: 17px; font-weight: 600; display: block; }
+    </style>
+</head>
+<body>
+    <header><h2>HotDeals Gosip</h2></header>
+    <div class="container"><div class="grid">"""
+    
     for filepath in glob.glob("content/*.html"):
         filename = os.path.basename(filepath)
         if filename != "index.html":
             slug = filename.replace('.html', '')
-            html += f'<li><a href="/{slug}">{slug.replace("-", " ").title()}</a></li>\n'
-    html += "</ul></body></html>"
+            html += f'<div class="card"><a href="/{slug}">{slug.replace("-", " ").title()}</a></div>\n'
+            
+    html += """</div></div></body></html>"""
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
     print("\n[OK] Index.html diperbarui.")
@@ -153,11 +172,18 @@ def jalankan_bot():
     total_artikel_dibuat = 0
     batas_artikel = 4 
     
+    # TOPENG MANUSIA (User-Agent Google Chrome)
+    headers_penyamaran = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
     for rss in RSS_URLS:
         if total_artikel_dibuat >= batas_artikel: break
         print(f"\n[+] Mengekstrak dari: {rss}")
         try:
-            feed = feedparser.parse(rss)
+            # Menggunakan httpx untuk menyamar, lalu diserahkan ke feedparser
+            response = httpx.get(rss, headers=headers_penyamaran, timeout=20.0, follow_redirects=True)
+            feed = feedparser.parse(response.content)
             print(f"    Ditemukan {len(feed.entries)} berita.")
             
             for entry in feed.entries[:2]:
@@ -167,9 +193,6 @@ def jalankan_bot():
                 teks_mentah = entry.get('description', '') or entry.get('summary', '') or entry.title
                 teks_asli = re.sub(r'<[^>]+>', '', teks_mentah) 
                 
-                print(f"    Karakter teks asli: {len(teks_asli)}")
-                
-                # Syarat minimal karakter kita turunkan jadi 20 agar lebih longgar
                 if len(teks_asli) > 20: 
                     judul_baru, konten_baru = rewrite_dengan_gemini(teks_asli)
                     if judul_baru and konten_baru:
@@ -177,7 +200,7 @@ def jalankan_bot():
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
                 else:
-                    print("    -> [LEWAT] Teks dari sumber terlalu pendek/kosong.")
+                    print("    -> [LEWAT] Teks dari sumber terlalu pendek.")
         except Exception as e:
             print(f"[!] Error saat memproses {rss}: {e}")
 
