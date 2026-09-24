@@ -2,6 +2,7 @@ import os
 import random
 import re
 import glob
+import time  # <-- Modul baru untuk memberikan jeda waktu
 import feedparser
 import httpx
 import xml.etree.ElementTree as ET
@@ -51,7 +52,6 @@ def rewrite_dengan_gemini(teks_asli):
     Informasi asli: {teks_asli}
     """
     
-    # UPGRADE MESIN KE GEMINI 3.8 FLASH SESUAI PERMINTAAN GOOGLE
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
     
     payload = {
@@ -82,7 +82,7 @@ def rewrite_dengan_gemini(teks_asli):
                 print("    -> AI BERHASIL menulis artikel!")
                 return judul, konten_html
         
-        print(f"    -> [!] AI menolak menjawab. Info: {data.get('error', 'Tidak diketahui')}")
+        print(f"    -> [!] AI menolak menjawab. Info: {data.get('error', {}).get('message', 'Tidak diketahui')}")
         return None, None
         
     except Exception as e:
@@ -202,6 +202,9 @@ def jalankan_bot():
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
+                        
+                    print("    -> [JEDA] Istirahat 15 detik agar tidak diblokir Google...")
+                    time.sleep(15)  # <-- INI KUNCI UTAMANYA
                 else:
                     print("    -> [LEWAT] Teks kosong.")
         except Exception as e:
