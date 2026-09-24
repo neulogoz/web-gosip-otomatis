@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
 
-# Sumber Berita yang Ramah RSS Aggregator (KapanLagi terbukti tembus 84 artikel!)
+# Sumber Berita yang Ramah RSS Aggregator 
 RSS_URLS = [
     "https://www.kapanlagi.com/feed/",
     "https://www.antaranews.com/rss/hiburan",
@@ -51,9 +51,8 @@ def rewrite_dengan_gemini(teks_asli):
     Informasi asli: {teks_asli}
     """
     
-    # MENGGUNAKAN JALUR LANGSUNG (REST API) - Anti Error Modul Google
-    # Kita menggunakan model gemini-2.0-flash yang aktif
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    # UPGRADE MESIN KE GEMINI 3.8 FLASH SESUAI PERMINTAAN GOOGLE
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
     
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -67,7 +66,6 @@ def rewrite_dengan_gemini(teks_asli):
     
     try:
         print("    -> Sedang meminta AI meracik artikel via Jalur Langsung...")
-        # Tembak API langsung menggunakan httpx
         response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
         data = response.json()
         
