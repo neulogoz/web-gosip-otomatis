@@ -19,7 +19,7 @@ RSS_URLS = [
 ]
 
 GAMBAR_CADANGAN = "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
-ARTIKEL_PER_HALAMAN = 12 # Jumlah thumbnail yang tampil di Beranda
+ARTIKEL_PER_HALAMAN = 12 
 
 def ekstrak_gambar(entry):
     if 'media_content' in entry and len(entry.media_content) > 0:
@@ -54,9 +54,15 @@ def dapatkan_google_trends():
 def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
     api_key = os.getenv("GEMINI_API_KEY")
+    
+    # PERBAIKAN #4: PROMPT LONG-TAIL KEYWORD & CLICKBAIT TINGKAT DEWA
     prompt = f"""
     Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang PANJANG dan utuh (minimal 5-7 paragraf).
-    ATURAN: DILARANG KERAS menggunakan emoji. Gaya bahasa jurnalisme santai. Baris PERTAMA wajib berisi Judul clickbait. Baris KEDUA dan seterusnya adalah isi berita. Sisipkan kata kunci trending berikut secara natural: {kata_kunci_trending}.
+    ATURAN: 
+    1. DILARANG KERAS menggunakan emoji. Gaya bahasa jurnalisme santai, tajam, dan memancing rasa penasaran. 
+    2. Baris PERTAMA wajib berisi Judul panjang (Long-Tail Keyword) yang SANGAT MEMANCING KLIK. Gunakan imbuhan memancing seperti "Fakta Mengejutkan", "Alasan Sebenarnya", "Terbaru", atau "Bikin Heboh".
+    3. Baris KEDUA dan seterusnya adalah isi berita yang didramatisasi ala wartawan hiburan. 
+    4. Sisipkan kata kunci trending berikut secara natural ke dalam teks: {kata_kunci_trending}.
     Informasi asli: {teks_asli}
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
@@ -97,13 +103,45 @@ def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
-def buat_halaman_html(judul, konten, image_url, slug):
+# Tambahan parameter "artikel_lama" untuk membuat fitur Internal Link
+def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
+    
+    # PERBAIKAN #1: INJEKSI SCHEMA MARKUP JSON-LD UNTUK SEO GOOGLE
+    schema_dict = {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": judul,
+        "image": [image_url],
+        "datePublished": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "author": {
+            "@type": "Organization",
+            "name": "Redaksi LensaTerkini",
+            "url": "https://hotdealscpm.me/"
+        }
+    }
+    schema_json = json.dumps(schema_dict, ensure_ascii=False)
+    
+    # PERBAIKAN #2: MEMBANGUN JARING INTERNAL LINK ("BACA JUGA")
+    baca_juga_html = ""
+    if artikel_lama and len(artikel_lama) >= 3:
+        pilihan = random.sample(artikel_lama, min(4, len(artikel_lama))) # Ambil 4 artikel acak
+        baca_juga_html = """
+        <div class="mt-10 bg-gray-50 p-6 rounded-xl border border-gray-200">
+            <h3 class="text-xl font-bold text-red-600 mb-4 border-b border-gray-200 pb-2">🔥 Berita Terkait Lainnya</h3>
+            <ul class="space-y-3">
+        """
+        for item in pilihan:
+            baca_juga_html += f"<li><a href='/{item['slug']}' class='text-gray-800 font-semibold hover:text-red-600 transition-colors flex items-start gap-2'><span class='text-red-500 mt-1'>➥</span> <span>{item['judul']}</span></a></li>"
+        baca_juga_html += "</ul></div>"
+
     html_template = """<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>[JUDUL]</title>
+    <!-- SUNTIKAN SCHEMA MARKUP SEO -->
+    <script type="application/ld+json">[SCHEMA_JSON]</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>.content p { margin-bottom: 1.25rem; font-size: 1.125rem; line-height: 1.75; color: #374151; }</style>
 </head>
@@ -127,9 +165,14 @@ def buat_halaman_html(judul, konten, image_url, slug):
             <span class="bg-red-100 text-red-600 px-2 py-1 rounded font-bold mr-3">Gosip Viral</span><span>Redaksi LensaTerkini</span>
         </div>
         <img src="[IMAGE_URL]" onerror="this.onerror=null;this.src='[GAMBAR_CADANGAN]';" alt="Thumbnail Berita" class="w-full h-auto object-cover rounded-xl shadow-lg mb-8 aspect-video">
+        
         <div class="content bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
             [KONTEN]
+            
+            <!-- INTERNAL LINK "BACA JUGA" -->
+            [BACA_JUGA_HTML]
         </div>
+
         <div class="flex justify-center mt-8 bg-gray-100 p-2 rounded">
             <script>atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };</script>
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
@@ -138,7 +181,6 @@ def buat_halaman_html(judul, konten, image_url, slug):
     <footer class="bg-gray-800 text-white text-center py-6 mt-12">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
         <div style="display:none;">
-            <!-- Histats.com  START  (aync)-->
             <script type="text/javascript">var _Hasync= _Hasync|| [];
             _Hasync.push(['Histats.start', '1,5054635,4,0,0,0,00010000']);
             _Hasync.push(['Histats.fasi', '1']);
@@ -149,17 +191,19 @@ def buat_halaman_html(judul, konten, image_url, slug):
             (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(hs);
             })();</script>
             <noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?5054635&101" alt="cool hit counter" border="0"></a></noscript>
-            <!-- Histats.com  END  -->
         </div>
     </footer>
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
-    html_final = html_template.replace("[JUDUL]", judul).replace("[IMAGE_URL]", image_url).replace("[KONTEN]", konten).replace("[GAMBAR_CADANGAN]", GAMBAR_CADANGAN)
+    
+    html_final = html_template.replace("[JUDUL]", judul).replace("[IMAGE_URL]", image_url).replace("[KONTEN]", konten)
+    html_final = html_final.replace("[SCHEMA_JSON]", schema_json).replace("[BACA_JUGA_HTML]", baca_juga_html).replace("[GAMBAR_CADANGAN]", GAMBAR_CADANGAN)
+    
     with open(f"content/{slug}.html", "w", encoding="utf-8") as f: f.write(html_final)
     print(f"    -> [SUKSES] {slug}.html disimpan!")
 
-# === PEMBUATAN BERANDA DENGAN FITUR PAGINATION ===
+
 def buat_index_html(semua_artikel):
     total_artikel = len(semua_artikel)
     total_halaman = math.ceil(total_artikel / ARTIKEL_PER_HALAMAN) if total_artikel > 0 else 1
@@ -211,7 +255,6 @@ def buat_index_html(semua_artikel):
 </body>
 </html>"""
 
-    # Membuat halaman satu per satu
     for page in range(1, total_halaman + 1):
         start_idx = (page - 1) * ARTIKEL_PER_HALAMAN
         end_idx = start_idx + ARTIKEL_PER_HALAMAN
@@ -233,7 +276,6 @@ def buat_index_html(semua_artikel):
                 </div>
             </div>"""
         
-        # Membuat Navigasi Paginasi (Tombol Prev/Next)
         paginasi_html = '<div class="flex justify-center mt-12 space-x-2">'
         if page > 1:
             prev_link = "/" if page == 2 else f"/page-{page-1}.html"
@@ -342,13 +384,11 @@ def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
     
     artikel_lama = []
-    # 1. Bersihkan ingatan memori JSON dari file Google Verification
     if os.path.exists("content/search.json"):
         try:
             with open("content/search.json", "r", encoding="utf-8") as f:
                 data_lama = json.load(f)
                 for item in data_lama:
-                    # BLOCKIR MEMORI FILE GOOGLE CONSOLE
                     if item["slug"].startswith("google"): continue
                     if "timestamp" not in item: item["timestamp"] = 0 
                     artikel_lama.append(item)
@@ -359,7 +399,6 @@ def jalankan_bot():
         for filepath in file_html_lama:
             filename = os.path.basename(filepath)
             
-            # BLOCKIR FILE GOOGLE & FILE PAGE (page-2.html) AGAR TIDAK JADI ARTIKEL
             if filename in ["index.html", "sitemap.xml", "search.html"] or filename.startswith("google") or filename.startswith("page-"):
                 continue
                 
@@ -398,7 +437,10 @@ def jalankan_bot():
                     if judul_baru and konten_baru:
                         slug = bersihkan_judul(judul_baru)
                         gambar = ekstrak_gambar(entry)
-                        buat_halaman_html(judul_baru, konten_baru, gambar, slug)
+                        
+                        # MELEMPARKAN ARTIKEL LAMA KE FUNGSI INI UNTUK "BACA JUGA"
+                        buat_halaman_html(judul_baru, konten_baru, gambar, slug, artikel_lama)
+                        
                         artikel_baru.append({"judul": judul_baru, "slug": slug, "gambar": gambar, "timestamp": int(time.time())})
                         total_artikel_dibuat += 1
                         time.sleep(15)
