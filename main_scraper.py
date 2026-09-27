@@ -115,12 +115,9 @@ def buat_halaman_html(judul, konten, image_url, slug):
     </style>
 </head>
 <body class="bg-gray-50 font-sans antialiased">
-    <!-- Navbar Profesional -->
     <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
             <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
-            
-            <!-- Kolom Pencarian -->
             <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
                 <input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required>
                 <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
@@ -129,7 +126,11 @@ def buat_halaman_html(judul, konten, image_url, slug):
     </nav>
 
     <main class="max-w-3xl mx-auto px-4 py-8">
-        <!-- Iklan Atas -->
+        
+        <!-- Judul Berita -->
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">[JUDUL]</h1>
+        
+        <!-- IKLAN BANNER (DIPINDAH KE BAWAH JUDUL SESUAI PERMINTAAN) -->
         <div class="flex justify-center mb-6 bg-gray-100 p-2 rounded">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -137,17 +138,13 @@ def buat_halaman_html(judul, konten, image_url, slug):
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
 
-        <!-- Judul & Meta -->
-        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">[JUDUL]</h1>
         <div class="flex items-center text-sm text-gray-500 mb-6">
             <span class="bg-red-100 text-red-600 px-2 py-1 rounded font-bold mr-3">Gosip Viral</span>
             <span>Redaksi LensaTerkini</span>
         </div>
 
-        <!-- Gambar Utama -->
         <img src="[IMAGE_URL]" alt="Thumbnail Berita" class="w-full h-auto object-cover rounded-xl shadow-lg mb-8 aspect-video">
         
-        <!-- Isi Artikel -->
         <div class="content bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
             [KONTEN]
         </div>
@@ -161,16 +158,22 @@ def buat_halaman_html(judul, konten, image_url, slug):
         </div>
     </main>
 
-    <!-- Footer -->
     <footer class="bg-gray-800 text-white text-center py-6 mt-12">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network. All rights reserved.</p>
+        
+        <!-- HIDDEN HISTATS CODE -->
+        <div style="display:none;">
+            <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
+            
+            
+            
+            <!-- BATAS BAWAH HISTATS -->
+        </div>
     </footer>
 
-    <!-- Iklan Popunder -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
-    
     html_final = html_template.replace("[JUDUL]", judul).replace("[IMAGE_URL]", image_url).replace("[KONTEN]", konten)
     filepath = f"content/{slug}.html"
     with open(filepath, "w", encoding="utf-8") as f:
@@ -178,7 +181,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
     print(f"    -> [SUKSES] File {slug}.html berhasil disimpan!")
 
 # === 2. HALAMAN UTAMA (BERANDA) ===
-def buat_index_html():
+def buat_index_html(semua_artikel):
     html = """<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -188,12 +191,9 @@ def buat_index_html():
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
-    <!-- Navbar Profesional -->
     <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
             <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
-            
-            <!-- Kolom Pencarian -->
             <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
                 <input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required>
                 <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
@@ -201,42 +201,29 @@ def buat_index_html():
         </div>
     </nav>
 
-    <!-- Header / Hero Section -->
     <div class="bg-gray-800 text-white text-center py-10 px-4 mb-8">
         <h1 class="text-3xl md:text-5xl font-bold mb-3">Kabar Sensasional Hari Ini</h1>
         <p class="text-gray-300 md:text-lg">Berita paling viral dan terpanas dari dunia hiburan tanah air.</p>
     </div>
 
-    <!-- Grid Berita -->
     <div class="max-w-5xl mx-auto px-4 pb-12">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">"""
     
-    file_html_tersedia = [f for f in glob.glob("content/*.html") if os.path.basename(f) not in ["index.html", "sitemap.xml", "search.html"]]
-    # Urutkan berdasarkan waktu modifikasi terbaru
-    file_html_tersedia.sort(key=os.path.getmtime, reverse=True)
-    
-    for filepath in file_html_tersedia:
-        slug = os.path.basename(filepath).replace('.html', '')
-        try:
-            with open(filepath, "r", encoding="utf-8") as file_artikel:
-                isi_file = file_artikel.read()
-                judul_match = re.search(r'<title>(.*?)</title>', isi_file)
-                judul_tampil = judul_match.group(1) if judul_match else slug.replace("-", " ").title()
-                gambar_match = re.search(r'<img src="(.*?)"', isi_file)
-                gambar_tampil = gambar_match.group(1) if gambar_match else "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=500&q=60"
-        except:
-            judul_tampil = slug.replace("-", " ").title()
-            gambar_tampil = "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=500&q=60"
+    # Render artikel dari yang PALING BARU (di index teratas Buku Induk)
+    for item in semua_artikel:
+        slug = item["slug"]
+        judul = item["judul"]
+        gambar = item["gambar"]
         
         html += f"""
             <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
                 <a href="/{slug}">
-                    <img src="{gambar_tampil}" alt="Thumbnail" class="w-full h-48 object-cover">
+                    <img src="{gambar}" alt="Thumbnail" class="w-full h-48 object-cover">
                 </a>
                 <div class="p-5 flex flex-col flex-grow">
                     <span class="text-xs font-bold text-red-600 mb-2 uppercase">Viral</span>
                     <a href="/{slug}" class="text-lg font-bold text-gray-800 hover:text-red-600 line-clamp-3 leading-snug mb-4">
-                        {judul_tampil}
+                        {judul}
                     </a>
                     <div class="mt-auto">
                         <a href="/{slug}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full hover:bg-red-600 hover:text-white transition-colors">Baca &rarr;</a>
@@ -248,66 +235,48 @@ def buat_index_html():
         </div>
     </div>
     
-    <!-- Footer -->
     <footer class="bg-gray-800 text-white text-center py-6">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
+        
+        <!-- HIDDEN HISTATS CODE -->
+        <div style="display:none;">
+            <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
+            
+            
+            
+            <!-- BATAS BAWAH HISTATS -->
+        </div>
     </footer>
-    <!-- Iklan Popunder -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
     
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("[OK] Index.html bergaya Portal Berita telah diperbarui.")
+    print("[OK] Index.html diperbarui. Urutan DIJAMIN berita terbaru di atas.")
 
 # === 3. SITEMAP XML (SEO) ===
-def buat_sitemap_xml():
+def buat_sitemap_xml(semua_artikel):
     base_url = "https://lensaterkini.net"
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
     
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    
-    # Homepage
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     xml_content += f'  <url>\n    <loc>{base_url}/</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>\n'
     
-    for filepath in glob.glob("content/*.html"):
-        filename = os.path.basename(filepath)
-        if filename not in ["index.html", "sitemap.xml", "search.html"]:
-            slug = filename.replace('.html', '')
-            xml_content += f'  <url>\n    <loc>{base_url}/{slug}</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n'
+    for item in semua_artikel:
+        slug = item["slug"]
+        xml_content += f'  <url>\n    <loc>{base_url}/{slug}</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n'
             
     xml_content += '</urlset>'
-    
     with open("content/sitemap.xml", "w", encoding="utf-8") as f:
         f.write(xml_content)
     print("[OK] Sitemap.xml berhasil diperbarui.")
 
 # === 4. HALAMAN PENCARIAN (SEARCH) ===
-def buat_sistem_pencarian():
-    print("[+] Membangun sistem pencarian...")
-    data_pencarian = []
-    
-    for filepath in glob.glob("content/*.html"):
-        filename = os.path.basename(filepath)
-        if filename not in ["index.html", "sitemap.xml", "search.html"]:
-            slug = filename.replace('.html', '')
-            try:
-                with open(filepath, "r", encoding="utf-8") as file_artikel:
-                    isi_file = file_artikel.read()
-                    judul_match = re.search(r'<title>(.*?)</title>', isi_file)
-                    judul = judul_match.group(1) if judul_match else slug.replace("-", " ")
-                    gambar_match = re.search(r'<img src="(.*?)"', isi_file)
-                    gambar = gambar_match.group(1) if gambar_match else ""
-            except:
-                judul = slug.replace("-", " ")
-                gambar = ""
-                
-            data_pencarian.append({"judul": judul, "slug": slug, "gambar": gambar})
-            
+def buat_sistem_pencarian(semua_artikel):
+    print("[+] Menyimpan database pencarian...")
     with open("content/search.json", "w", encoding="utf-8") as f:
-        json.dump(data_pencarian, f)
+        json.dump(semua_artikel, f)
         
     html_search = """<!DOCTYPE html>
 <html lang="id">
@@ -318,7 +287,6 @@ def buat_sistem_pencarian():
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
-    <!-- Navbar -->
     <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
             <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
@@ -331,7 +299,6 @@ def buat_sistem_pencarian():
 
     <div class="max-w-5xl mx-auto px-4 py-8 min-h-screen">
         <h1 class="text-2xl font-bold mb-6">Hasil Pencarian: <span id="keywordDisplay" class="text-red-600">...</span></h1>
-        
         <div id="searchResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             <p class="text-gray-500 col-span-full">Memuat hasil pencarian...</p>
         </div>
@@ -339,6 +306,15 @@ def buat_sistem_pencarian():
     
     <footer class="bg-gray-800 text-white text-center py-6">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
+        
+        <!-- HIDDEN HISTATS CODE -->
+        <div style="display:none;">
+            <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
+            
+            
+            
+            <!-- BATAS BAWAH HISTATS -->
+        </div>
     </footer>
 
     <script>
@@ -372,23 +348,51 @@ def buat_sistem_pencarian():
                             </div>`;
                         });
                     } else {
-                        resultsContainer.innerHTML = '<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan. Coba kata kunci lain.</p>';
+                        resultsContainer.innerHTML = '<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan.</p>';
                     }
                 });
-        } else {
-            document.getElementById('keywordDisplay').innerText = 'Kosong';
-            document.getElementById('searchResults').innerHTML = '<p class="text-gray-500 col-span-full">Silakan ketikkan kata kunci di kolom pencarian.</p>';
         }
     </script>
 </body>
 </html>"""
     with open("content/search.html", "w", encoding="utf-8") as f:
         f.write(html_search)
-    print("[OK] Halaman search.html dan search.json berhasil dibuat!")
+    print("[OK] Halaman search.html berhasil dibuat!")
 
 # === EKSEKUSI BOT UTAMA ===
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
+    
+    # 1. BACA BUKU INDUK LAMA (Ini yang mengunci urutan tetap akurat)
+    artikel_lama = []
+    if os.path.exists("content/search.json"):
+        try:
+            with open("content/search.json", "r", encoding="utf-8") as f:
+                artikel_lama = json.load(f)
+        except:
+            pass
+            
+    # Jika Buku Induk belum ada, buat baru dari file HTML yang sudah ada
+    if not artikel_lama:
+        file_html_lama = [f for f in glob.glob("content/*.html") if os.path.basename(f) not in ["index.html", "sitemap.xml", "search.html"]]
+        
+        for filepath in file_html_lama:
+            slug = os.path.basename(filepath).replace('.html', '')
+            try:
+                with open(filepath, "r", encoding="utf-8") as f_html:
+                    isi = f_html.read()
+                    jdl = re.search(r'<title>(.*?)</title>', isi)
+                    gmb = re.search(r'<img src="(.*?)"', isi)
+                    artikel_lama.append({
+                        "judul": jdl.group(1) if jdl else slug.replace("-", " "),
+                        "slug": slug,
+                        "gambar": gmb.group(1) if gmb else ""
+                    })
+            except:
+                pass
+
+    # 2. PROSES ARTIKEL BARU
+    artikel_baru = []
     random.shuffle(RSS_URLS)
     total_artikel_dibuat = 0
     batas_artikel = 4 
@@ -399,12 +403,10 @@ def jalankan_bot():
         try:
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
             feed = feedparser.parse(response.content)
-            print(f"    Ditemukan {len(feed.entries)} berita.")
             
             for entry in feed.entries[:3]:
                 if total_artikel_dibuat >= batas_artikel: break
                 
-                print(f"  - Judul Asli: {entry.title}")
                 teks_mentah = entry.get('description', '') or entry.get('summary', '') or entry.title
                 teks_asli = re.sub(r'<[^>]+>', '', teks_mentah) 
                 
@@ -413,21 +415,31 @@ def jalankan_bot():
                     
                     if judul_baru and konten_baru:
                         slug = bersihkan_judul(judul_baru)
-                        buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
-                        total_artikel_dibuat += 1
+                        gambar = ekstrak_gambar(entry)
+                        buat_halaman_html(judul_baru, konten_baru, gambar, slug)
                         
-                        print("    -> [JEDA AMAN] Istirahat 15 detik...")
+                        # Simpan data artikel baru
+                        artikel_baru.append({
+                            "judul": judul_baru,
+                            "slug": slug,
+                            "gambar": gambar
+                        })
+                        
+                        total_artikel_dibuat += 1
                         time.sleep(15)
-                else:
-                    print("    -> [LEWAT] Teks kosong.")
         except Exception as e:
-            print(f"[!] Error saat memproses {rss}: {e}")
+            print(f"[!] Error: {e}")
 
-    # --- SETELAH SELESAI SCRAPING, BANGUN SEMUA HALAMAN WEB ---
-    print("\n=== MEMBANGUN TAMPILAN WEB & SEO ===")
-    buat_index_html()
-    buat_sitemap_xml() 
-    buat_sistem_pencarian()
+    # 3. KUNCI PENGGABUNGAN (Artikel BARU dipaksa masuk urutan PALING ATAS)
+    slug_baru = [item["slug"] for item in artikel_baru]
+    artikel_lama_bersih = [item for item in artikel_lama if item["slug"] not in slug_baru] 
+    
+    semua_artikel = artikel_baru + artikel_lama_bersih # Baru di atas, Lama terdorong ke bawah
+
+    # 4. BANGUN ULANG HALAMAN WEB BERDASARKAN URUTAN TERBARU
+    buat_index_html(semua_artikel)
+    buat_sitemap_xml(semua_artikel) 
+    buat_sistem_pencarian(semua_artikel)
 
 if __name__ == "__main__":
     os.makedirs('content', exist_ok=True)
