@@ -17,9 +17,7 @@ RSS_URLS = [
     "https://daerah.sindonews.com/rss"
 ]
 
-# 1. PERBAIKAN: EKSTRAKTOR GAMBAR SUPER
 def ekstrak_gambar(entry):
-    # Cek Tag Standar RSS
     if 'media_content' in entry and len(entry.media_content) > 0:
         return entry.media_content[0]['url']
     if 'media_thumbnail' in entry and len(entry.media_thumbnail) > 0:
@@ -29,7 +27,6 @@ def ekstrak_gambar(entry):
             if link.get('type', '').startswith('image/') or link.get('rel') == 'enclosure':
                 return link.href
                 
-    # Cek Gambar Tersembunyi di dalam Teks Deskripsi menggunakan Regex
     konten_mentah = ''
     if 'content' in entry:
         konten_mentah = entry.content[0].value
@@ -40,7 +37,6 @@ def ekstrak_gambar(entry):
     if img_match:
         return img_match.group(1)
         
-    # Gambar Cadangan Kuat jika berita asli benar-benar tanpa gambar (Tema Koran/Berita)
     return "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
 
 def dapatkan_google_trends():
@@ -251,7 +247,7 @@ def buat_index_html(semua_artikel):
         f.write(html)
 
 def buat_sitemap_xml(semua_artikel):
-    base_url = "https://lensaterkini.net"
+    base_url = "https://hotdealscpm.me" 
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
     
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -353,7 +349,6 @@ def jalankan_bot():
         try:
             with open("content/search.json", "r", encoding="utf-8") as f:
                 artikel_lama = json.load(f)
-                # Tambahkan stempel waktu default untuk artikel lama
                 for item in artikel_lama:
                     if "timestamp" not in item:
                         item["timestamp"] = 0 
@@ -364,7 +359,6 @@ def jalankan_bot():
         for filepath in file_html_lama:
             filename = os.path.basename(filepath)
             
-            # 3. PERBAIKAN: BLOKIR FILE GOOGLE CONSOLE AGAR TIDAK TAMPIL
             if filename in ["index.html", "sitemap.xml", "search.html"] or filename.startswith("google"):
                 continue
                 
@@ -378,7 +372,7 @@ def jalankan_bot():
                         "judul": jdl.group(1) if jdl else slug.replace("-", " "),
                         "slug": slug,
                         "gambar": gmb.group(1) if gmb else "",
-                        "timestamp": os.path.getmtime(filepath) # Ambil waktu file sbg patokan awal
+                        "timestamp": os.path.getmtime(filepath)
                     })
             except: pass
 
@@ -408,7 +402,6 @@ def jalankan_bot():
                         gambar = ekstrak_gambar(entry)
                         buat_halaman_html(judul_baru, konten_baru, gambar, slug)
                         
-                        # 2. PERBAIKAN: ARTIKEL BARU DIBERI CAP WAKTU SAAT INI
                         artikel_baru.append({
                             "judul": judul_baru,
                             "slug": slug,
@@ -418,16 +411,13 @@ def jalankan_bot():
                         
                         total_artikel_dibuat += 1
                         time.sleep(15)
-        except Exception as e:
+        except Exception:
             pass
 
-    # Kunci Penggabungan: Hapus duplikat dari data lama jika ada update
     slug_baru = [item["slug"] for item in artikel_baru]
     artikel_lama_bersih = [item for item in artikel_lama if item["slug"] not in slug_baru] 
     
     semua_artikel = artikel_baru + artikel_lama_bersih 
-    
-    # KUNCI FINAL: Memaksa urutan berdasarkan Timestamp dari yang paling baru ke terlama
     semua_artikel = sorted(semua_artikel, key=lambda x: x.get("timestamp", 0), reverse=True)
 
     print("\n=== MEMBANGUN WEB ===")
