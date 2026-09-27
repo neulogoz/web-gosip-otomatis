@@ -3,12 +3,14 @@ import random
 import re
 import glob
 import time
+import json
 import feedparser
 import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
 
+# === SUMBER RSS GOSIP/HIBURAN ===
 RSS_URLS = [
     "https://www.kapanlagi.com/feed/",
     "https://www.antaranews.com/rss/hiburan",
@@ -38,7 +40,6 @@ def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
     api_key = os.getenv("GEMINI_API_KEY")
     
-    # PROMPT DIPERBARUI AGAR ARTIKEL LEBIH PANJANG (Ramah SEO & Adsterra)
     prompt = f"""
     Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang PANJANG dan utuh (minimal 5-7 paragraf).
     
@@ -53,7 +54,6 @@ def rewrite_dengan_gemini(teks_asli):
     """
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
-    
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "safetySettings": [
@@ -84,8 +84,8 @@ def rewrite_dengan_gemini(teks_asli):
             error_msg = data.get('error', {}).get('message', 'Tidak diketahui')
             print(f"    -> [!] AI menolak: {error_msg}")
             
-            if "high demand" in error_msg.lower() or "503" in str(data):
-                print("    -> [SABAR] Server Google sedang padat. Menunggu 30 detik...")
+            if "high demand" in error_msg.lower() or "exceeded" in error_msg.lower() or "503" in str(data):
+                print("    -> [SABAR] Server Google sedang padat / limit. Menunggu 30 detik...")
                 time.sleep(30)
                 continue
             else:
@@ -101,6 +101,7 @@ def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
+# === 1. HALAMAN ARTIKEL (POST) ===
 def buat_halaman_html(judul, konten, image_url, slug):
     html_template = """<!DOCTYPE html>
 <html lang="id">
@@ -108,37 +109,64 @@ def buat_halaman_html(judul, konten, image_url, slug):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>[JUDUL]</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --primary: #e63946; --bg: #f3f4f6; --text: #374151; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); line-height: 1.7; margin: 0; padding: 0; }
-        header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; }
-        header a { text-decoration: none; color: var(--primary); font-size: 24px; font-weight: 800; }
-        .container { max-width: 680px; margin: 25px auto; background: #fff; padding: 30px; border-radius: 10px; }
-        .hero-img { width: 100%; height: auto; border-radius: 8px; margin-bottom: 25px; object-fit: cover; aspect-ratio: 16/9; }
+        .content p { margin-bottom: 1.25rem; font-size: 1.125rem; line-height: 1.75; color: #374151; }
     </style>
 </head>
-<body>
-    <header><a href="/">HotDeals Gosip</a></header>
-    <main class="container">
-        
-        <div style="text-align: center; margin-bottom: 20px;">
+<body class="bg-gray-50 font-sans antialiased">
+    <!-- Navbar Profesional -->
+    <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
+            
+            <!-- Kolom Pencarian -->
+            <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
+                <input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required>
+                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+        <!-- Iklan Atas -->
+        <div class="flex justify-center mb-6 bg-gray-100 p-2 rounded">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
             </script>
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
 
-        <h1>[JUDUL]</h1>
-        <img src="[IMAGE_URL]" alt="Gambar Berita" class="hero-img">
-        <div class="content">[KONTEN]</div>
+        <!-- Judul & Meta -->
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">[JUDUL]</h1>
+        <div class="flex items-center text-sm text-gray-500 mb-6">
+            <span class="bg-red-100 text-red-600 px-2 py-1 rounded font-bold mr-3">Gosip Viral</span>
+            <span>Redaksi LensaTerkini</span>
+        </div>
+
+        <!-- Gambar Utama -->
+        <img src="[IMAGE_URL]" alt="Thumbnail Berita" class="w-full h-auto object-cover rounded-xl shadow-lg mb-8 aspect-video">
         
-        <div style="text-align: center; margin-top: 20px;">
+        <!-- Isi Artikel -->
+        <div class="content bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
+            [KONTEN]
+        </div>
+        
+        <!-- Iklan Bawah -->
+        <div class="flex justify-center mt-8 bg-gray-100 p-2 rounded">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
             </script>
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
     </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white text-center py-6 mt-12">
+        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network. All rights reserved.</p>
+    </footer>
+
+    <!-- Iklan Popunder -->
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
@@ -149,75 +177,216 @@ def buat_halaman_html(judul, konten, image_url, slug):
         f.write(html_final)
     print(f"    -> [SUKSES] File {slug}.html berhasil disimpan!")
 
+# === 2. HALAMAN UTAMA (BERANDA) ===
 def buat_index_html():
     html = """<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HotDeals Gosip - Berita Terkini</title>
-    <style>
-        :root { --primary: #e63946; --bg: #f3f4f6; --text: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
-        header { background: #fff; border-bottom: 3px solid var(--primary); padding: 15px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        header h2 { margin: 0; font-size: 24px; color: var(--primary); font-weight: 800; text-transform: uppercase; }
-        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
-        .grid { display: flex; flex-direction: column; gap: 12px; }
-        .card { background: #fff; padding: 18px 20px; border-radius: 8px; border-left: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
-        .card a { text-decoration: none; color: #1f2937; font-size: 17px; font-weight: 600; display: block; }
-    </style>
+    <title>LensaTerkini - Portal Gosip & Berita Viral Hari Ini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <header><h2>HotDeals Gosip</h2></header>
-    <div class="container"><div class="grid">"""
-    
-    for filepath in glob.glob("content/*.html"):
-        filename = os.path.basename(filepath)
-        if filename != "index.html" and filename != "sitemap.xml":
-            slug = filename.replace('.html', '')
-            html += f'<div class="card"><a href="/{slug}">{slug.replace("-", " ").title()}</a></div>\n'
+<body class="bg-gray-100 font-sans antialiased">
+    <!-- Navbar Profesional -->
+    <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
             
-    html += """</div></div></body></html>"""
+            <!-- Kolom Pencarian -->
+            <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
+                <input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required>
+                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
+            </form>
+        </div>
+    </nav>
+
+    <!-- Header / Hero Section -->
+    <div class="bg-gray-800 text-white text-center py-10 px-4 mb-8">
+        <h1 class="text-3xl md:text-5xl font-bold mb-3">Kabar Sensasional Hari Ini</h1>
+        <p class="text-gray-300 md:text-lg">Berita paling viral dan terpanas dari dunia hiburan tanah air.</p>
+    </div>
+
+    <!-- Grid Berita -->
+    <div class="max-w-5xl mx-auto px-4 pb-12">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">"""
+    
+    file_html_tersedia = [f for f in glob.glob("content/*.html") if os.path.basename(f) not in ["index.html", "sitemap.xml", "search.html"]]
+    # Urutkan berdasarkan waktu modifikasi terbaru
+    file_html_tersedia.sort(key=os.path.getmtime, reverse=True)
+    
+    for filepath in file_html_tersedia:
+        slug = os.path.basename(filepath).replace('.html', '')
+        try:
+            with open(filepath, "r", encoding="utf-8") as file_artikel:
+                isi_file = file_artikel.read()
+                judul_match = re.search(r'<title>(.*?)</title>', isi_file)
+                judul_tampil = judul_match.group(1) if judul_match else slug.replace("-", " ").title()
+                gambar_match = re.search(r'<img src="(.*?)"', isi_file)
+                gambar_tampil = gambar_match.group(1) if gambar_match else "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=500&q=60"
+        except:
+            judul_tampil = slug.replace("-", " ").title()
+            gambar_tampil = "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=500&q=60"
+        
+        html += f"""
+            <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
+                <a href="/{slug}">
+                    <img src="{gambar_tampil}" alt="Thumbnail" class="w-full h-48 object-cover">
+                </a>
+                <div class="p-5 flex flex-col flex-grow">
+                    <span class="text-xs font-bold text-red-600 mb-2 uppercase">Viral</span>
+                    <a href="/{slug}" class="text-lg font-bold text-gray-800 hover:text-red-600 line-clamp-3 leading-snug mb-4">
+                        {judul_tampil}
+                    </a>
+                    <div class="mt-auto">
+                        <a href="/{slug}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full hover:bg-red-600 hover:text-white transition-colors">Baca &rarr;</a>
+                    </div>
+                </div>
+            </div>"""
+            
+    html += """
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white text-center py-6">
+        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
+    </footer>
+    <!-- Iklan Popunder -->
+    <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
+</body>
+</html>"""
+    
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("\n[OK] Index.html diperbarui.")
+    print("[OK] Index.html bergaya Portal Berita telah diperbarui.")
 
-# === FUNGSI BARU UNTUK SITEMAP XML ===
+# === 3. SITEMAP XML (SEO) ===
 def buat_sitemap_xml():
-    base_url = "https://hotdealscpm.me"
+    base_url = "https://lensaterkini.net"
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
     
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     
-    # Halaman Utama (Homepage)
-    xml_content += '  <url>\n'
-    xml_content += f'    <loc>{base_url}/</loc>\n'
-    xml_content += f'    <lastmod>{tanggal_sekarang}</lastmod>\n'
-    xml_content += '    <changefreq>hourly</changefreq>\n'
-    xml_content += '    <priority>1.0</priority>\n'
-    xml_content += '  </url>\n'
+    # Homepage
+    xml_content += f'  <url>\n    <loc>{base_url}/</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>\n'
     
-    # Looping semua artikel untuk dimasukkan ke sitemap
     for filepath in glob.glob("content/*.html"):
         filename = os.path.basename(filepath)
-        if filename != "index.html" and filename != "sitemap.xml":
+        if filename not in ["index.html", "sitemap.xml", "search.html"]:
             slug = filename.replace('.html', '')
-            xml_content += '  <url>\n'
-            # Di Github Pages, link menggunakan format /slug
-            xml_content += f'    <loc>{base_url}/{slug}</loc>\n'
-            xml_content += f'    <lastmod>{tanggal_sekarang}</lastmod>\n'
-            xml_content += '    <changefreq>daily</changefreq>\n'
-            xml_content += '    <priority>0.8</priority>\n'
-            xml_content += '  </url>\n'
+            xml_content += f'  <url>\n    <loc>{base_url}/{slug}</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n'
             
     xml_content += '</urlset>'
     
-    # Simpan di folder content agar ikut di-upload ke GitHub Pages
     with open("content/sitemap.xml", "w", encoding="utf-8") as f:
         f.write(xml_content)
-    print("[OK] Sitemap.xml berhasil dibuat dan diperbarui.")
+    print("[OK] Sitemap.xml berhasil diperbarui.")
 
+# === 4. HALAMAN PENCARIAN (SEARCH) ===
+def buat_sistem_pencarian():
+    print("[+] Membangun sistem pencarian...")
+    data_pencarian = []
+    
+    for filepath in glob.glob("content/*.html"):
+        filename = os.path.basename(filepath)
+        if filename not in ["index.html", "sitemap.xml", "search.html"]:
+            slug = filename.replace('.html', '')
+            try:
+                with open(filepath, "r", encoding="utf-8") as file_artikel:
+                    isi_file = file_artikel.read()
+                    judul_match = re.search(r'<title>(.*?)</title>', isi_file)
+                    judul = judul_match.group(1) if judul_match else slug.replace("-", " ")
+                    gambar_match = re.search(r'<img src="(.*?)"', isi_file)
+                    gambar = gambar_match.group(1) if gambar_match else ""
+            except:
+                judul = slug.replace("-", " ")
+                gambar = ""
+                
+            data_pencarian.append({"judul": judul, "slug": slug, "gambar": gambar})
+            
+    with open("content/search.json", "w", encoding="utf-8") as f:
+        json.dump(data_pencarian, f)
+        
+    html_search = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencarian - LensaTerkini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
+            <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
+                <input type="text" name="q" id="searchInputTop" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500">
+                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
+            </form>
+        </div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto px-4 py-8 min-h-screen">
+        <h1 class="text-2xl font-bold mb-6">Hasil Pencarian: <span id="keywordDisplay" class="text-red-600">...</span></h1>
+        
+        <div id="searchResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <p class="text-gray-500 col-span-full">Memuat hasil pencarian...</p>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-800 text-white text-center py-6">
+        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
+    </footer>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const query = urlParams.get('q');
+        
+        if(query) {
+            document.getElementById('keywordDisplay').innerText = '"' + query + '"';
+            document.getElementById('searchInputTop').value = query;
+            
+            fetch('/search.json')
+                .then(response => response.json())
+                .then(data => {
+                    const results = data.filter(item => item.judul.toLowerCase().includes(query.toLowerCase()));
+                    const resultsContainer = document.getElementById('searchResults');
+                    resultsContainer.innerHTML = '';
+                    
+                    if(results.length > 0) {
+                        results.forEach(item => {
+                            resultsContainer.innerHTML += `
+                            <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl flex flex-col">
+                                <a href="/${item.slug}">
+                                    <img src="${item.gambar}" class="w-full h-48 object-cover">
+                                </a>
+                                <div class="p-5 flex flex-col flex-grow">
+                                    <a href="/${item.slug}" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${item.judul}</a>
+                                    <div class="mt-auto">
+                                        <a href="/${item.slug}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a>
+                                    </div>
+                                </div>
+                            </div>`;
+                        });
+                    } else {
+                        resultsContainer.innerHTML = '<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan. Coba kata kunci lain.</p>';
+                    }
+                });
+        } else {
+            document.getElementById('keywordDisplay').innerText = 'Kosong';
+            document.getElementById('searchResults').innerHTML = '<p class="text-gray-500 col-span-full">Silakan ketikkan kata kunci di kolom pencarian.</p>';
+        }
+    </script>
+</body>
+</html>"""
+    with open("content/search.html", "w", encoding="utf-8") as f:
+        f.write(html_search)
+    print("[OK] Halaman search.html dan search.json berhasil dibuat!")
+
+# === EKSEKUSI BOT UTAMA ===
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
     random.shuffle(RSS_URLS)
@@ -246,15 +415,19 @@ def jalankan_bot():
                         slug = bersihkan_judul(judul_baru)
                         buat_halaman_html(judul_baru, konten_baru, ekstrak_gambar(entry), slug)
                         total_artikel_dibuat += 1
-                        print("    -> [JEDA AMAN] Istirahat 15 detik sebelum artikel berikutnya...")
+                        
+                        print("    -> [JEDA AMAN] Istirahat 15 detik...")
                         time.sleep(15)
                 else:
                     print("    -> [LEWAT] Teks kosong.")
         except Exception as e:
             print(f"[!] Error saat memproses {rss}: {e}")
 
+    # --- SETELAH SELESAI SCRAPING, BANGUN SEMUA HALAMAN WEB ---
+    print("\n=== MEMBANGUN TAMPILAN WEB & SEO ===")
     buat_index_html()
-    buat_sitemap_xml() # <--- Memanggil fungsi sitemap di akhir
+    buat_sitemap_xml() 
+    buat_sistem_pencarian()
 
 if __name__ == "__main__":
     os.makedirs('content', exist_ok=True)
