@@ -17,14 +17,31 @@ RSS_URLS = [
     "https://daerah.sindonews.com/rss"
 ]
 
+# 1. PERBAIKAN: EKSTRAKTOR GAMBAR SUPER
 def ekstrak_gambar(entry):
-    if 'media_content' in entry:
+    # Cek Tag Standar RSS
+    if 'media_content' in entry and len(entry.media_content) > 0:
         return entry.media_content[0]['url']
-    elif 'links' in entry:
+    if 'media_thumbnail' in entry and len(entry.media_thumbnail) > 0:
+        return entry.media_thumbnail[0]['url']
+    if 'links' in entry:
         for link in entry.links:
-            if link.get('type', '').startswith('image/'):
+            if link.get('type', '').startswith('image/') or link.get('rel') == 'enclosure':
                 return link.href
-    return "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&w=800&q=80"
+                
+    # Cek Gambar Tersembunyi di dalam Teks Deskripsi menggunakan Regex
+    konten_mentah = ''
+    if 'content' in entry:
+        konten_mentah = entry.content[0].value
+    elif 'description' in entry:
+        konten_mentah = entry.description
+        
+    img_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', konten_mentah)
+    if img_match:
+        return img_match.group(1)
+        
+    # Gambar Cadangan Kuat jika berita asli benar-benar tanpa gambar (Tema Koran/Berita)
+    return "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
 
 def dapatkan_google_trends():
     try:
@@ -33,7 +50,7 @@ def dapatkan_google_trends():
         root = ET.fromstring(response.content)
         trends = [item.find('title').text for item in root.findall('.//item')[:5]]
         return ", ".join(trends)
-    except Exception as e:
+    except Exception:
         return "gosip selebriti, artis viral, berita hiburan"
 
 def rewrite_dengan_gemini(teks_asli):
@@ -66,7 +83,7 @@ def rewrite_dengan_gemini(teks_asli):
     
     for percobaan in range(3):
         try:
-            print(f"    -> Sedang meminta AI meracik artikel (Percobaan {percobaan + 1}/3)...")
+            print(f"    -> Meminta AI meracik artikel (Percobaan {percobaan + 1}/3)...")
             response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
             data = response.json()
             
@@ -78,21 +95,16 @@ def rewrite_dengan_gemini(teks_asli):
                     judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
                     konten = '\n'.join(baris_teks[1:])
                     konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in konten.split('\n') if p.strip()])
-                    print("    -> [BERHASIL] AI selesai menulis artikel!")
                     return judul, konten_html
             
-            error_msg = data.get('error', {}).get('message', 'Tidak diketahui')
-            print(f"    -> [!] AI menolak: {error_msg}")
-            
+            error_msg = data.get('error', {}).get('message', '')
             if "high demand" in error_msg.lower() or "exceeded" in error_msg.lower() or "503" in str(data):
-                print("    -> [SABAR] Server Google sedang padat / limit. Menunggu 30 detik...")
+                print("    -> [SABAR] Server/Quota padat. Menunggu 30 detik...")
                 time.sleep(30)
                 continue
             else:
                 return None, None
-                
         except Exception as e:
-            print(f"    -> [!] ERROR KONEKSI GEMINI: {e}")
             time.sleep(15)
             
     return None, None
@@ -101,7 +113,6 @@ def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
-# === 1. HALAMAN ARTIKEL (POST) ===
 def buat_halaman_html(judul, konten, image_url, slug):
     html_template = """<!DOCTYPE html>
 <html lang="id">
@@ -126,11 +137,8 @@ def buat_halaman_html(judul, konten, image_url, slug):
     </nav>
 
     <main class="max-w-3xl mx-auto px-4 py-8">
-        
-        <!-- Judul Berita -->
         <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">[JUDUL]</h1>
         
-        <!-- IKLAN BANNER (DIPINDAH KE BAWAH JUDUL SESUAI PERMINTAAN) -->
         <div class="flex justify-center mb-6 bg-gray-100 p-2 rounded">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -149,7 +157,6 @@ def buat_halaman_html(judul, konten, image_url, slug):
             [KONTEN]
         </div>
         
-        <!-- Iklan Bawah -->
         <div class="flex justify-center mt-8 bg-gray-100 p-2 rounded">
             <script>
               atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
@@ -159,18 +166,13 @@ def buat_halaman_html(judul, konten, image_url, slug):
     </main>
 
     <footer class="bg-gray-800 text-white text-center py-6 mt-12">
-        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network. All rights reserved.</p>
-        
-        <!-- HIDDEN HISTATS CODE -->
+        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
         <div style="display:none;">
             <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
-            
-            
             
             <!-- BATAS BAWAH HISTATS -->
         </div>
     </footer>
-
     <script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script>
 </body>
 </html>"""
@@ -178,9 +180,8 @@ def buat_halaman_html(judul, konten, image_url, slug):
     filepath = f"content/{slug}.html"
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(html_final)
-    print(f"    -> [SUKSES] File {slug}.html berhasil disimpan!")
+    print(f"    -> [SUKSES] {slug}.html disimpan!")
 
-# === 2. HALAMAN UTAMA (BERANDA) ===
 def buat_index_html(semua_artikel):
     html = """<!DOCTYPE html>
 <html lang="id">
@@ -209,7 +210,6 @@ def buat_index_html(semua_artikel):
     <div class="max-w-5xl mx-auto px-4 pb-12">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">"""
     
-    # Render artikel dari yang PALING BARU (di index teratas Buku Induk)
     for item in semua_artikel:
         slug = item["slug"]
         judul = item["judul"]
@@ -237,12 +237,8 @@ def buat_index_html(semua_artikel):
     
     <footer class="bg-gray-800 text-white text-center py-6">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
-        
-        <!-- HIDDEN HISTATS CODE -->
         <div style="display:none;">
             <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
-            
-            
             
             <!-- BATAS BAWAH HISTATS -->
         </div>
@@ -253,9 +249,7 @@ def buat_index_html(semua_artikel):
     
     with open("content/index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("[OK] Index.html diperbarui. Urutan DIJAMIN berita terbaru di atas.")
 
-# === 3. SITEMAP XML (SEO) ===
 def buat_sitemap_xml(semua_artikel):
     base_url = "https://lensaterkini.net"
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
@@ -270,11 +264,8 @@ def buat_sitemap_xml(semua_artikel):
     xml_content += '</urlset>'
     with open("content/sitemap.xml", "w", encoding="utf-8") as f:
         f.write(xml_content)
-    print("[OK] Sitemap.xml berhasil diperbarui.")
 
-# === 4. HALAMAN PENCARIAN (SEARCH) ===
 def buat_sistem_pencarian(semua_artikel):
-    print("[+] Menyimpan database pencarian...")
     with open("content/search.json", "w", encoding="utf-8") as f:
         json.dump(semua_artikel, f)
         
@@ -306,12 +297,8 @@ def buat_sistem_pencarian(semua_artikel):
     
     <footer class="bg-gray-800 text-white text-center py-6">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
-        
-        <!-- HIDDEN HISTATS CODE -->
         <div style="display:none;">
             <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
-            
-            
             
             <!-- BATAS BAWAH HISTATS -->
         </div>
@@ -357,27 +344,31 @@ def buat_sistem_pencarian(semua_artikel):
 </html>"""
     with open("content/search.html", "w", encoding="utf-8") as f:
         f.write(html_search)
-    print("[OK] Halaman search.html berhasil dibuat!")
 
-# === EKSEKUSI BOT UTAMA ===
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
     
-    # 1. BACA BUKU INDUK LAMA (Ini yang mengunci urutan tetap akurat)
     artikel_lama = []
     if os.path.exists("content/search.json"):
         try:
             with open("content/search.json", "r", encoding="utf-8") as f:
                 artikel_lama = json.load(f)
-        except:
-            pass
+                # Tambahkan stempel waktu default untuk artikel lama
+                for item in artikel_lama:
+                    if "timestamp" not in item:
+                        item["timestamp"] = 0 
+        except: pass
             
-    # Jika Buku Induk belum ada, buat baru dari file HTML yang sudah ada
     if not artikel_lama:
-        file_html_lama = [f for f in glob.glob("content/*.html") if os.path.basename(f) not in ["index.html", "sitemap.xml", "search.html"]]
-        
+        file_html_lama = [f for f in glob.glob("content/*.html")]
         for filepath in file_html_lama:
-            slug = os.path.basename(filepath).replace('.html', '')
+            filename = os.path.basename(filepath)
+            
+            # 3. PERBAIKAN: BLOKIR FILE GOOGLE CONSOLE AGAR TIDAK TAMPIL
+            if filename in ["index.html", "sitemap.xml", "search.html"] or filename.startswith("google"):
+                continue
+                
+            slug = filename.replace('.html', '')
             try:
                 with open(filepath, "r", encoding="utf-8") as f_html:
                     isi = f_html.read()
@@ -386,12 +377,11 @@ def jalankan_bot():
                     artikel_lama.append({
                         "judul": jdl.group(1) if jdl else slug.replace("-", " "),
                         "slug": slug,
-                        "gambar": gmb.group(1) if gmb else ""
+                        "gambar": gmb.group(1) if gmb else "",
+                        "timestamp": os.path.getmtime(filepath) # Ambil waktu file sbg patokan awal
                     })
-            except:
-                pass
+            except: pass
 
-    # 2. PROSES ARTIKEL BARU
     artikel_baru = []
     random.shuffle(RSS_URLS)
     total_artikel_dibuat = 0
@@ -399,7 +389,7 @@ def jalankan_bot():
     
     for rss in RSS_URLS:
         if total_artikel_dibuat >= batas_artikel: break
-        print(f"\n[+] Mengekstrak dari: {rss}")
+        print(f"\n[+] Mengekstrak: {rss}")
         try:
             response = cffi_requests.get(rss, impersonate="chrome110", timeout=30.0)
             feed = feedparser.parse(response.content)
@@ -418,25 +408,29 @@ def jalankan_bot():
                         gambar = ekstrak_gambar(entry)
                         buat_halaman_html(judul_baru, konten_baru, gambar, slug)
                         
-                        # Simpan data artikel baru
+                        # 2. PERBAIKAN: ARTIKEL BARU DIBERI CAP WAKTU SAAT INI
                         artikel_baru.append({
                             "judul": judul_baru,
                             "slug": slug,
-                            "gambar": gambar
+                            "gambar": gambar,
+                            "timestamp": int(time.time())
                         })
                         
                         total_artikel_dibuat += 1
                         time.sleep(15)
         except Exception as e:
-            print(f"[!] Error: {e}")
+            pass
 
-    # 3. KUNCI PENGGABUNGAN (Artikel BARU dipaksa masuk urutan PALING ATAS)
+    # Kunci Penggabungan: Hapus duplikat dari data lama jika ada update
     slug_baru = [item["slug"] for item in artikel_baru]
     artikel_lama_bersih = [item for item in artikel_lama if item["slug"] not in slug_baru] 
     
-    semua_artikel = artikel_baru + artikel_lama_bersih # Baru di atas, Lama terdorong ke bawah
+    semua_artikel = artikel_baru + artikel_lama_bersih 
+    
+    # KUNCI FINAL: Memaksa urutan berdasarkan Timestamp dari yang paling baru ke terlama
+    semua_artikel = sorted(semua_artikel, key=lambda x: x.get("timestamp", 0), reverse=True)
 
-    # 4. BANGUN ULANG HALAMAN WEB BERDASARKAN URUTAN TERBARU
+    print("\n=== MEMBANGUN WEB ===")
     buat_index_html(semua_artikel)
     buat_sitemap_xml(semua_artikel) 
     buat_sistem_pencarian(semua_artikel)
