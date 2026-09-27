@@ -17,7 +17,11 @@ RSS_URLS = [
     "https://daerah.sindonews.com/rss"
 ]
 
+# === GAMBAR CADANGAN (TEMA BERITA) ===
+GAMBAR_CADANGAN = "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
+
 def ekstrak_gambar(entry):
+    # 1. Cek media standar RSS
     if 'media_content' in entry and len(entry.media_content) > 0:
         return entry.media_content[0]['url']
     if 'media_thumbnail' in entry and len(entry.media_thumbnail) > 0:
@@ -27,17 +31,19 @@ def ekstrak_gambar(entry):
             if link.get('type', '').startswith('image/') or link.get('rel') == 'enclosure':
                 return link.href
                 
-    konten_mentah = ''
-    if 'content' in entry:
-        konten_mentah = entry.content[0].value
-    elif 'description' in entry:
-        konten_mentah = entry.description
-        
-    img_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', konten_mentah)
+    # 2. Bongkar paksa isi teks jika disembunyikan
+    konten_mentah = str(entry.get('content', [{}])[0].get('value', '')) + " " + str(entry.get('description', ''))
+    
+    # Cari tag lazy-load seperti data-src, data-original, dll (Super Agresif)
+    img_match = re.search(r'(?:src|data-src|data-original|data-lazy-src)=["\'](https?://[^"\']+\.(?:jpg|jpeg|png|webp|gif)[^"\']*)["\']', konten_mentah, re.IGNORECASE)
     if img_match:
         return img_match.group(1)
         
-    return "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
+    img_match_2 = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', konten_mentah, re.IGNORECASE)
+    if img_match_2:
+        return img_match_2.group(1)
+        
+    return GAMBAR_CADANGAN
 
 def dapatkan_google_trends():
     try:
@@ -110,7 +116,7 @@ def bersihkan_judul(judul):
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug):
-    html_template = """<!DOCTYPE html>
+    html_template = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -118,7 +124,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
     <title>[JUDUL]</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .content p { margin-bottom: 1.25rem; font-size: 1.125rem; line-height: 1.75; color: #374151; }
+        .content p {{ margin-bottom: 1.25rem; font-size: 1.125rem; line-height: 1.75; color: #374151; }}
     </style>
 </head>
 <body class="bg-gray-50 font-sans antialiased">
@@ -137,7 +143,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
         
         <div class="flex justify-center mb-6 bg-gray-100 p-2 rounded">
             <script>
-              atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
+              atOptions = {{ 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {{}} }};
             </script>
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
@@ -147,7 +153,8 @@ def buat_halaman_html(judul, konten, image_url, slug):
             <span>Redaksi LensaTerkini</span>
         </div>
 
-        <img src="[IMAGE_URL]" alt="Thumbnail Berita" class="w-full h-auto object-cover rounded-xl shadow-lg mb-8 aspect-video">
+        <!-- TRIK ONERROR: JIKA GAMBAR ASLI RUSAK, GANTI GAMBAR CADANGAN OTOMATIS -->
+        <img src="[IMAGE_URL]" onerror="this.onerror=null;this.src='{GAMBAR_CADANGAN}';" alt="Thumbnail Berita" class="w-full h-auto object-cover rounded-xl shadow-lg mb-8 aspect-video">
         
         <div class="content bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
             [KONTEN]
@@ -155,7 +162,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
         
         <div class="flex justify-center mt-8 bg-gray-100 p-2 rounded">
             <script>
-              atOptions = { 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
+              atOptions = {{ 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {{}} }};
             </script>
             <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
         </div>
@@ -165,7 +172,18 @@ def buat_halaman_html(judul, konten, image_url, slug):
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
         <div style="display:none;">
             <!-- SILAKAN PASTE SCRIPT HISTATS ANDA DI BAWAH BARIS INI -->
-            
+             <!-- Histats.com  START  (aync)-->
+<script type="text/javascript">var _Hasync= _Hasync|| [];
+_Hasync.push(['Histats.start', '1,5054635,4,0,0,0,00010000']);
+_Hasync.push(['Histats.fasi', '1']);
+_Hasync.push(['Histats.track_hits', '']);
+(function() {
+var hs = document.createElement('script'); hs.type = 'text/javascript'; hs.async = true;
+hs.src = ('//s10.histats.com/js15_as.js');
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(hs);
+})();</script>
+<noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?5054635&101" alt="cool hit counter" border="0"></a></noscript>
+<!-- Histats.com  END  -->
             <!-- BATAS BAWAH HISTATS -->
         </div>
     </footer>
@@ -179,7 +197,7 @@ def buat_halaman_html(judul, konten, image_url, slug):
     print(f"    -> [SUKSES] {slug}.html disimpan!")
 
 def buat_index_html(semua_artikel):
-    html = """<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -214,7 +232,8 @@ def buat_index_html(semua_artikel):
         html += f"""
             <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
                 <a href="/{slug}">
-                    <img src="{gambar}" alt="Thumbnail" class="w-full h-48 object-cover">
+                    <!-- TRIK ONERROR UNTUK THUMBNAIL BERANDA -->
+                    <img src="{gambar}" onerror="this.onerror=null;this.src='{GAMBAR_CADANGAN}';" alt="Thumbnail" class="w-full h-48 object-cover">
                 </a>
                 <div class="p-5 flex flex-col flex-grow">
                     <span class="text-xs font-bold text-red-600 mb-2 uppercase">Viral</span>
@@ -265,7 +284,7 @@ def buat_sistem_pencarian(semua_artikel):
     with open("content/search.json", "w", encoding="utf-8") as f:
         json.dump(semua_artikel, f)
         
-    html_search = """<!DOCTYPE html>
+    html_search = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -303,38 +322,40 @@ def buat_sistem_pencarian(semua_artikel):
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const query = urlParams.get('q');
+        const gambarCadangan = "{GAMBAR_CADANGAN}";
         
-        if(query) {
+        if(query) {{
             document.getElementById('keywordDisplay').innerText = '"' + query + '"';
             document.getElementById('searchInputTop').value = query;
             
             fetch('/search.json')
                 .then(response => response.json())
-                .then(data => {
+                .then(data => {{
                     const results = data.filter(item => item.judul.toLowerCase().includes(query.toLowerCase()));
                     const resultsContainer = document.getElementById('searchResults');
                     resultsContainer.innerHTML = '';
                     
-                    if(results.length > 0) {
-                        results.forEach(item => {
+                    if(results.length > 0) {{
+                        results.forEach(item => {{
                             resultsContainer.innerHTML += `
                             <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl flex flex-col">
-                                <a href="/${item.slug}">
-                                    <img src="${item.gambar}" class="w-full h-48 object-cover">
+                                <a href="/${{item.slug}}">
+                                    <!-- TRIK ONERROR UNTUK PENCARIAN -->
+                                    <img src="${{item.gambar}}" onerror="this.onerror=null;this.src='${{gambarCadangan}}';" class="w-full h-48 object-cover">
                                 </a>
                                 <div class="p-5 flex flex-col flex-grow">
-                                    <a href="/${item.slug}" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${item.judul}</a>
+                                    <a href="/${{item.slug}}" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${{item.judul}}</a>
                                     <div class="mt-auto">
-                                        <a href="/${item.slug}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a>
+                                        <a href="/${{item.slug}}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a>
                                     </div>
                                 </div>
                             </div>`;
-                        });
-                    } else {
+                        }});
+                    }} else {{
                         resultsContainer.innerHTML = '<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan.</p>';
-                    }
-                });
-        }
+                    }}
+                }});
+        }}
     </script>
 </body>
 </html>"""
@@ -371,7 +392,7 @@ def jalankan_bot():
                     artikel_lama.append({
                         "judul": jdl.group(1) if jdl else slug.replace("-", " "),
                         "slug": slug,
-                        "gambar": gmb.group(1) if gmb else "",
+                        "gambar": gmb.group(1) if gmb else GAMBAR_CADANGAN,
                         "timestamp": os.path.getmtime(filepath)
                     })
             except: pass
