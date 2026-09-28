@@ -24,9 +24,11 @@
     </div>
     <footer class="bg-gray-800 text-white text-center py-6">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
+        
         <div style="display:none;">
+            <!-- Histats.com  START  (aync)-->
             <script type="text/javascript">var _Hasync= _Hasync|| [];
-            _Hasync.push(['Histats.start', '1,5054635,4,0,0,0,00010000']);
+            _Hasync.push(['Histats.start', '1,5055003,4,0,0,0,00010000']);
             _Hasync.push(['Histats.fasi', '1']);
             _Hasync.push(['Histats.track_hits', '']);
             (function() {
@@ -34,8 +36,10 @@
             hs.src = ('//s10.histats.com/js15_as.js');
             (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(hs);
             })();</script>
-            <noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?5054635&101" alt="cool hit counter" border="0"></a></noscript>
+            <noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?5055003&101" alt="hit tracker" border="0"></a></noscript>
+            <!-- Histats.com  END  -->
         </div>
+    
     </footer>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -53,10 +57,10 @@
                     results.forEach(item => {
                         resultsContainer.innerHTML += `
                         <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl flex flex-col">
-                            <a href="/${item.slug}"><img src="${item.gambar}" onerror="this.onerror=null;this.src='${gambarCadangan}';" class="w-full h-48 object-cover"></a>
+                            <a href="/${item.slug}.html"><img src="${item.gambar}" onerror="this.onerror=null;this.src='${gambarCadangan}';" class="w-full h-48 object-cover"></a>
                             <div class="p-5 flex flex-col flex-grow">
-                                <a href="/${item.slug}" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${item.judul}</a>
-                                <div class="mt-auto"><a href="/${item.slug}" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a></div>
+                                <a href="/${item.slug}.html" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${item.judul}</a>
+                                <div class="mt-auto"><a href="/${item.slug}.html" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a></div>
                             </div>
                         </div>`;
                     });
