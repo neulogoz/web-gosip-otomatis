@@ -55,7 +55,6 @@ def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
     api_key = os.getenv("GEMINI_API_KEY")
     
-    # PERBAIKAN #4: PROMPT LONG-TAIL KEYWORD & CLICKBAIT TINGKAT DEWA
     prompt = f"""
     Kembangkan informasi singkat hiburan berikut menjadi sebuah artikel/berita gosip yang PANJANG dan utuh (minimal 5-7 paragraf).
     ATURAN: 
@@ -103,10 +102,9 @@ def bersihkan_judul(judul):
     judul_bersih = re.sub(r'[^a-zA-Z0-9\s-]', '', judul)
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
-# Tambahan parameter "artikel_lama" untuk membuat fitur Internal Link
 def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
     
-    # PERBAIKAN #1: INJEKSI SCHEMA MARKUP JSON-LD UNTUK SEO GOOGLE
+    # URL DOMAIN BARU UNTUK SCHEMA MARKUP
     schema_dict = {
         "@context": "https://schema.org",
         "@type": "NewsArticle",
@@ -116,15 +114,14 @@ def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
         "author": {
             "@type": "Organization",
             "name": "Redaksi LensaTerkini",
-            "url": "https://hotdealscpm.me/"
+            "url": "https://lensaterkini.my.id/"
         }
     }
     schema_json = json.dumps(schema_dict, ensure_ascii=False)
     
-    # PERBAIKAN #2: MEMBANGUN JARING INTERNAL LINK ("BACA JUGA")
     baca_juga_html = ""
     if artikel_lama and len(artikel_lama) >= 3:
-        pilihan = random.sample(artikel_lama, min(4, len(artikel_lama))) # Ambil 4 artikel acak
+        pilihan = random.sample(artikel_lama, min(4, len(artikel_lama))) 
         baca_juga_html = """
         <div class="mt-10 bg-gray-50 p-6 rounded-xl border border-gray-200">
             <h3 class="text-xl font-bold text-red-600 mb-4 border-b border-gray-200 pb-2">🔥 Berita Terkait Lainnya</h3>
@@ -296,7 +293,8 @@ def buat_index_html(semua_artikel):
     print(f"[OK] Berhasil membuat {total_halaman} halaman (Pagination).")
 
 def buat_sitemap_xml(semua_artikel):
-    base_url = "https://hotdealscpm.me" 
+    # DOMAIN BARU UNTUK SITEMAP
+    base_url = "https://lensaterkini.my.id" 
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     xml_content += f'  <url>\n    <loc>{base_url}/</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>\n'
@@ -438,7 +436,6 @@ def jalankan_bot():
                         slug = bersihkan_judul(judul_baru)
                         gambar = ekstrak_gambar(entry)
                         
-                        # MELEMPARKAN ARTIKEL LAMA KE FUNGSI INI UNTUK "BACA JUGA"
                         buat_halaman_html(judul_baru, konten_baru, gambar, slug, artikel_lama)
                         
                         artikel_baru.append({"judul": judul_baru, "slug": slug, "gambar": gambar, "timestamp": int(time.time())})
