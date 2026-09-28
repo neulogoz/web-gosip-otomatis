@@ -84,13 +84,16 @@ def rewrite_dengan_gemini(teks_asli):
             
             error_msg = data.get('error', {}).get('message', '')
             print(f"    -> [GAGAL AI] Pesan error: {error_msg}")
-            if "high demand" in error_msg.lower() or "exceeded" in error_msg.lower() or "503" in str(data):
-                time.sleep(30)
+            
+            # PENANGANAN LIMIT GOOGLE (AUTO-DELAY 65 DETIK)
+            if "quota" in error_msg.lower() or "exceeded" in error_msg.lower() or "high demand" in error_msg.lower():
+                print("    -> [SISTEM] Terkena limit Google. Menunggu 65 detik agar blokir terbuka...")
+                time.sleep(65) 
                 continue
             else: return None, None
         except Exception as e:
             print(f"    -> [ERROR KONEKSI AI]: {e}")
-            time.sleep(15)
+            time.sleep(20)
     return None, None
 
 def bersihkan_judul(judul):
@@ -217,7 +220,6 @@ def jalankan_bot():
         except: pass
             
     if not artikel_lama:
-        print("[!] Mencari file HTML lama di root...")
         for filepath in glob.glob("*.html"):
             filename = os.path.basename(filepath)
             if filename in ["index.html", "sitemap.xml", "search.html"] or filename.startswith("page-") or filename.startswith("google"): continue
@@ -252,7 +254,10 @@ def jalankan_bot():
                         buat_halaman_html(judul_baru, konten_baru, gambar, slug, artikel_lama)
                         artikel_baru.append({"judul": judul_baru, "slug": slug, "gambar": gambar, "timestamp": int(time.time())})
                         total_artikel_dibuat += 1
-                        time.sleep(15)
+                        
+                        # TAMBAHAN JEDA SANTUY AGAR TIDAK TERKENA LIMIT GOOGLE
+                        print("    -> [SISTEM] Jeda 45 detik sebelum artikel berikutnya...")
+                        time.sleep(45)
         except Exception as e: print(f"[-] Gagal RSS {rss}: {e}")
 
     semua_artikel = sorted(artikel_baru + [i for i in artikel_lama if i["slug"] not in [a["slug"] for a in artikel_baru]], key=lambda x: x.get("timestamp", 0), reverse=True)
