@@ -103,8 +103,6 @@ def bersihkan_judul(judul):
     return re.sub(r'\s+', '-', judul_bersih.strip()).lower()
 
 def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
-    
-    # URL DOMAIN BARU UNTUK SCHEMA MARKUP
     schema_dict = {
         "@context": "https://schema.org",
         "@type": "NewsArticle",
@@ -197,9 +195,9 @@ def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
     html_final = html_template.replace("[JUDUL]", judul).replace("[IMAGE_URL]", image_url).replace("[KONTEN]", konten)
     html_final = html_final.replace("[SCHEMA_JSON]", schema_json).replace("[BACA_JUGA_HTML]", baca_juga_html).replace("[GAMBAR_CADANGAN]", GAMBAR_CADANGAN)
     
-    with open(f"content/{slug}.html", "w", encoding="utf-8") as f: f.write(html_final)
+    # DIKELUARKAN DARI FOLDER CONTENT
+    with open(f"{slug}.html", "w", encoding="utf-8") as f: f.write(html_final)
     print(f"    -> [SUKSES] {slug}.html disimpan!")
-
 
 def buat_index_html(semua_artikel):
     total_artikel = len(semua_artikel)
@@ -287,13 +285,13 @@ def buat_index_html(semua_artikel):
 
         html_final = html_template.replace("[GRID_BERITA]", grid_html).replace("[PAGINASI]", paginasi_html).replace("[GAMBAR_CADANGAN]", GAMBAR_CADANGAN)
         
-        filename = "content/index.html" if page == 1 else f"content/page-{page}.html"
+        # DIKELUARKAN DARI FOLDER CONTENT
+        filename = "index.html" if page == 1 else f"page-{page}.html"
         with open(filename, "w", encoding="utf-8") as f:
             f.write(html_final)
     print(f"[OK] Berhasil membuat {total_halaman} halaman (Pagination).")
 
 def buat_sitemap_xml(semua_artikel):
-    # DOMAIN BARU UNTUK SITEMAP
     base_url = "https://lensaterkini.my.id" 
     tanggal_sekarang = datetime.now().strftime("%Y-%m-%d")
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -301,10 +299,13 @@ def buat_sitemap_xml(semua_artikel):
     for item in semua_artikel:
         xml_content += f'  <url>\n    <loc>{base_url}/{item["slug"]}</loc>\n    <lastmod>{tanggal_sekarang}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n'
     xml_content += '</urlset>'
-    with open("content/sitemap.xml", "w", encoding="utf-8") as f: f.write(xml_content)
+    
+    # DIKELUARKAN DARI FOLDER CONTENT
+    with open("sitemap.xml", "w", encoding="utf-8") as f: f.write(xml_content)
 
 def buat_sistem_pencarian(semua_artikel):
-    with open("content/search.json", "w", encoding="utf-8") as f: json.dump(semua_artikel, f)
+    # DIKELUARKAN DARI FOLDER CONTENT
+    with open("search.json", "w", encoding="utf-8") as f: json.dump(semua_artikel, f)
     html_search = """<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -376,15 +377,18 @@ def buat_sistem_pencarian(semua_artikel):
 </body>
 </html>"""
     html_search = html_search.replace("[GAMBAR_CADANGAN]", GAMBAR_CADANGAN)
-    with open("content/search.html", "w", encoding="utf-8") as f: f.write(html_search)
+    
+    # DIKELUARKAN DARI FOLDER CONTENT
+    with open("search.html", "w", encoding="utf-8") as f: f.write(html_search)
 
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
     
     artikel_lama = []
-    if os.path.exists("content/search.json"):
+    # SESUAIKAN PENCARIAN FILE JSON
+    if os.path.exists("search.json"):
         try:
-            with open("content/search.json", "r", encoding="utf-8") as f:
+            with open("search.json", "r", encoding="utf-8") as f:
                 data_lama = json.load(f)
                 for item in data_lama:
                     if item["slug"].startswith("google"): continue
@@ -393,7 +397,8 @@ def jalankan_bot():
         except: pass
             
     if not artikel_lama:
-        file_html_lama = [f for f in glob.glob("content/*.html")]
+        # SESUAIKAN PENCARIAN FILE LAMA
+        file_html_lama = [f for f in glob.glob("*.html")]
         for filepath in file_html_lama:
             filename = os.path.basename(filepath)
             
@@ -455,6 +460,5 @@ def jalankan_bot():
     buat_sistem_pencarian(semua_artikel)
 
 if __name__ == "__main__":
-    os.makedirs('content', exist_ok=True)
     jalankan_bot()
     print("=== SELESAI ===")
