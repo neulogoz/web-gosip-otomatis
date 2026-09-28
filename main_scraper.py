@@ -43,9 +43,12 @@ def dapatkan_google_trends():
 
 def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
-    api_key = os.getenv("GEMINI_API_KEY")
     
-    if not api_key:
+    # SISTEM MULTI-KEY ROTATION
+    raw_keys = os.getenv("GEMINI_API_KEY", "")
+    kumpulan_key = [k.strip() for k in raw_keys.split(",") if k.strip()]
+    
+    if not kumpulan_key:
         print("    -> [ERROR] GEMINI_API_KEY tidak ditemukan di sistem!")
         return None, None
         
@@ -58,7 +61,6 @@ def rewrite_dengan_gemini(teks_asli):
     4. Sisipkan kata kunci trending berikut secara natural ke dalam teks: {kata_kunci_trending}.
     Informasi asli: {teks_asli}
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "safetySettings": [
@@ -69,31 +71,41 @@ def rewrite_dengan_gemini(teks_asli):
         ]
     }
     
-    for percobaan in range(3):
-        try:
-            print(f"    -> Meminta AI meracik artikel (Percobaan {percobaan + 1}/3)...")
-            response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
-            data = response.json()
-            if "candidates" in data:
-                teks_hasil = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
-                if len(baris_teks) > 1:
-                    judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
-                    konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in '\n'.join(baris_teks[1:]).split('\n') if p.strip()])
-                    return judul, konten_html
-            
-            error_msg = data.get('error', {}).get('message', '')
-            print(f"    -> [GAGAL AI] Pesan error: {error_msg}")
-            
-            # PENANGANAN LIMIT GOOGLE (AUTO-DELAY 65 DETIK)
-            if "quota" in error_msg.lower() or "exceeded" in error_msg.lower() or "high demand" in error_msg.lower():
-                print("    -> [SISTEM] Terkena limit Google. Menunggu 65 detik agar blokir terbuka...")
-                time.sleep(65) 
-                continue
-            else: return None, None
-        except Exception as e:
-            print(f"    -> [ERROR KONEKSI AI]: {e}")
-            time.sleep(20)
+    # ROTASI KEY OTOMATIS
+    for index_key, api_key in enumerate(kumpulan_key):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
+        
+        for percobaan in range(2): # Maksimal 2x coba per Key
+            try:
+                print(f"    -> Meminta AI meracik artikel (Mencoba Key ke-{index_key + 1}... Percobaan {percobaan + 1}/2)")
+                response = httpx.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=40.0)
+                data = response.json()
+                
+                # JIKA SUKSES
+                if "candidates" in data:
+                    teks_hasil = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    baris_teks = [b.strip() for b in teks_hasil.split('\n') if b.strip()]
+                    if len(baris_teks) > 1:
+                        judul = baris_teks[0].replace('"', '').replace('*', '').replace('Judul:', '').strip()
+                        konten_html = "".join([f"<p>{p.strip()}</p>\n" for p in '\n'.join(baris_teks[1:]).split('\n') if p.strip()])
+                        return judul, konten_html
+                
+                # JIKA ERROR
+                error_msg = data.get('error', {}).get('message', '')
+                print(f"    -> [GAGAL AI] Pesan error: {error_msg}")
+                
+                # CEK APAKAH KENA LIMIT
+                if "quota" in error_msg.lower() or "exceeded" in error_msg.lower() or "high demand" in error_msg.lower() or "429" in str(data):
+                    print("    -> [SISTEM] Terkena limit! Langsung melompat ke API Key berikutnya...")
+                    break # Langsung keluar dari percobaan ini, pindah ke loop 'api_key' berikutnya
+                else:
+                    time.sleep(10) # Jeda ringan jika errornya bukan karena limit
+                    
+            except Exception as e:
+                print(f"    -> [ERROR KONEKSI AI]: {e}")
+                time.sleep(10)
+                
+    print("    -> [ERROR FATAL] Semua API Key telah habis kuotanya/terkena limit.")
     return None, None
 
 def bersihkan_judul(judul):
@@ -255,9 +267,9 @@ def jalankan_bot():
                         artikel_baru.append({"judul": judul_baru, "slug": slug, "gambar": gambar, "timestamp": int(time.time())})
                         total_artikel_dibuat += 1
                         
-                        # TAMBAHAN JEDA SANTUY AGAR TIDAK TERKENA LIMIT GOOGLE
-                        print("    -> [SISTEM] Jeda 45 detik sebelum artikel berikutnya...")
-                        time.sleep(45)
+                        # JEDA RINGAN 15 DETIK AGAR API TIDAK KAGET
+                        print("    -> [SISTEM] Jeda 15 detik sebelum artikel berikutnya...")
+                        time.sleep(15)
         except Exception as e: print(f"[-] Gagal RSS {rss}: {e}")
 
     semua_artikel = sorted(artikel_baru + [i for i in artikel_lama if i["slug"] not in [a["slug"] for a in artikel_baru]], key=lambda x: x.get("timestamp", 0), reverse=True)
