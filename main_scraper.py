@@ -10,6 +10,8 @@ import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
+from google.oauth2 import service_account
+import requests
 
 # === SUMBER RSS GOSIP/HIBURAN ===
 RSS_URLS = [
@@ -20,6 +22,40 @@ RSS_URLS = [
 
 GAMBAR_CADANGAN = "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=800&q=80"
 ARTIKEL_PER_HALAMAN = 12 
+
+def ping_google_indexing(url_artikel):
+    json_key_str = os.getenv("GCP_JSON_KEY")
+    if not json_key_str:
+        print("    -> [SKIPPED] GCP_JSON_KEY tidak ditemukan. Lewati Indexing API.")
+        return
+        
+    try:
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(json_key_str),
+            scopes=['https://www.googleapis.com/auth/indexing']
+        )
+        
+        # Buat token OAuth2 baru
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+        
+        endpoint = "https://indexing.googleapis.com/v3/urlNotifications:publish"
+        headers = {
+            "Authorization": f"Bearer {credentials.token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "url": url_artikel,
+            "type": "URL_UPDATED"
+        }
+        
+        response = requests.post(endpoint, json=payload, headers=headers)
+        if response.status_code == 200:
+            print(f"    -> [INDEXING SUKSES] Google telah di-ping untuk URL ini!")
+        else:
+            print(f"    -> [INDEXING GAGAL] Status {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"    -> [ERROR INDEXING]: {e}")
 
 def ekstrak_gambar(entry):
     if 'media_content' in entry and len(entry.media_content) > 0: return entry.media_content[0]['url']
@@ -43,8 +79,6 @@ def dapatkan_google_trends():
 
 def rewrite_dengan_gemini(teks_asli):
     kata_kunci_trending = dapatkan_google_trends()
-    
-    # SISTEM MULTI-KEY ROTATION
     raw_keys = os.getenv("GEMINI_API_KEY", "")
     kumpulan_key = [k.strip() for k in raw_keys.split(",") if k.strip()]
     
@@ -71,10 +105,8 @@ def rewrite_dengan_gemini(teks_asli):
         ]
     }
     
-    # ROTASI KEY OTOMATIS (Anti Limit)
     for index_key, api_key in enumerate(kumpulan_key):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
-        
         for percobaan in range(2): 
             try:
                 print(f"    -> Meminta AI meracik artikel (Mencoba Key ke-{index_key + 1}... Percobaan {percobaan + 1}/2)")
@@ -90,19 +122,13 @@ def rewrite_dengan_gemini(teks_asli):
                         return judul, konten_html
                 
                 error_msg = data.get('error', {}).get('message', '')
-                print(f"    -> [GAGAL AI] Pesan error: {error_msg}")
-                
                 if "quota" in error_msg.lower() or "exceeded" in error_msg.lower() or "high demand" in error_msg.lower() or "429" in str(data):
-                    print("    -> [SISTEM] Terkena limit! Langsung melompat ke API Key berikutnya...")
+                    print("    -> [SISTEM] Terkena limit! Melompat ke API Key berikutnya...")
                     break 
                 else:
                     time.sleep(10) 
-                    
             except Exception as e:
-                print(f"    -> [ERROR KONEKSI AI]: {e}")
                 time.sleep(10)
-                
-    print("    -> [ERROR FATAL] Semua API Key telah habis kuotanya/terkena limit.")
     return None, None
 
 def bersihkan_judul(judul):
@@ -112,7 +138,6 @@ def bersihkan_judul(judul):
 def get_histats_code():
     return """
         <div style="display:none;">
-            <!-- Histats.com  START  (aync)-->
             <script type="text/javascript">var _Hasync= _Hasync|| [];
             _Hasync.push(['Histats.start', '1,5055003,4,0,0,0,00010000']);
             _Hasync.push(['Histats.fasi', '1']);
@@ -123,7 +148,6 @@ def get_histats_code():
             (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(hs);
             })();</script>
             <noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?5055003&101" alt="hit tracker" border="0"></a></noscript>
-            <!-- Histats.com  END  -->
         </div>
     """
 
@@ -176,10 +200,6 @@ def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
             {konten}
             {baca_juga_html}
         </div>
-        <div class="flex justify-center mt-8 bg-gray-100 p-2 rounded">
-            <script>atOptions = {{ 'key' : '34e8a8453e65d906ec3b64040798743a', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {{}} }};</script>
-            <script src="https://www.highrevenueformat.com/34e8a8453e65d906ec3b64040798743a/invoke.js"></script>
-        </div>
     </main>
     <footer class="bg-gray-800 text-white text-center py-6 mt-12">
         <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
@@ -193,22 +213,12 @@ def buat_halaman_html(judul, konten, image_url, slug, artikel_lama):
 
 def buat_index_html(semua_artikel):
     histats_html = get_histats_code()
-    total_artikel = len(semua_artikel)
-    total_halaman = math.ceil(total_artikel / ARTIKEL_PER_HALAMAN) if total_artikel > 0 else 1
+    total_halaman = math.ceil(len(semua_artikel) / ARTIKEL_PER_HALAMAN) if len(semua_artikel) > 0 else 1
     
     for page in range(1, total_halaman + 1):
         start_idx = (page - 1) * ARTIKEL_PER_HALAMAN
         artikel_page = semua_artikel[start_idx:start_idx + ARTIKEL_PER_HALAMAN]
-        grid_html = ""
-        for item in artikel_page:
-            grid_html += f"""
-            <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
-                <a href="/{item['slug']}.html"><img src="{item['gambar']}" onerror="this.onerror=null;this.src='{GAMBAR_CADANGAN}';" class="w-full h-48 object-cover"></a>
-                <div class="p-5 flex flex-col flex-grow">
-                    <a href="/{item['slug']}.html" class="text-lg font-bold text-gray-800 hover:text-red-600 line-clamp-3 leading-snug mb-4">{item['judul']}</a>
-                    <div class="mt-auto"><a href="/{item['slug']}.html" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full hover:bg-red-600 hover:text-white transition-colors">Baca &rarr;</a></div>
-                </div>
-            </div>"""
+        grid_html = "".join([f'<div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col"><a href="/{i["slug"]}.html"><img src="{i["gambar"]}" onerror="this.onerror=null;this.src=\'{GAMBAR_CADANGAN}\';" class="w-full h-48 object-cover"></a><div class="p-5 flex flex-col flex-grow"><a href="/{i["slug"]}.html" class="text-lg font-bold text-gray-800 hover:text-red-600 line-clamp-3 leading-snug mb-4">{i["judul"]}</a><div class="mt-auto"><a href="/{i["slug"]}.html" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full hover:bg-red-600 hover:text-white transition-colors">Baca &rarr;</a></div></div></div>' for i in artikel_page])
         
         paginasi_html = '<div class="flex justify-center mt-12 space-x-2">'
         if page > 1: paginasi_html += f'<a href="/{"index.html" if page==2 else f"page-{page-1}.html"}" class="px-4 py-2 bg-white text-red-600 border border-red-600 rounded font-bold">&laquo; Sebelumnya</a>'
@@ -216,10 +226,8 @@ def buat_index_html(semua_artikel):
         if page < total_halaman: paginasi_html += f'<a href="/page-{page+1}.html" class="px-4 py-2 bg-red-600 text-white rounded font-bold">Selanjutnya &raquo;</a>'
         paginasi_html += '</div>'
 
-        html_template = f"""<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LensaTerkini - Portal Gosip & Berita Viral Hari Ini</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 font-sans antialiased"><nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50"><div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4"><a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a><form action="/search.html" method="GET" class="flex w-full sm:w-auto"><input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required><button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button></form></div></nav><div class="bg-gray-800 text-white text-center py-10 px-4 mb-8"><h1 class="text-3xl md:text-5xl font-bold mb-3">Kabar Sensasional Hari Ini</h1><p class="text-gray-300 md:text-lg">Berita paling viral dan terpanas dari dunia hiburan tanah air.</p></div><div class="max-w-5xl mx-auto px-4 pb-12"><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">{grid_html}</div>{paginasi_html}</div><footer class="bg-gray-800 text-white text-center py-6"><p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>{histats_html}</footer><script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script></body></html>"""
-        
-        filename = "index.html" if page == 1 else f"page-{page}.html"
-        with open(filename, "w", encoding="utf-8") as f: f.write(html_template)
+        html_template = f'<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LensaTerkini - Portal Gosip & Berita Viral Hari Ini</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 font-sans antialiased"><nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50"><div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4"><a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a><form action="/search.html" method="GET" class="flex w-full sm:w-auto"><input type="text" name="q" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500" required><button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button></form></div></nav><div class="bg-gray-800 text-white text-center py-10 px-4 mb-8"><h1 class="text-3xl md:text-5xl font-bold mb-3">Kabar Sensasional Hari Ini</h1><p class="text-gray-300 md:text-lg">Berita paling viral dan terpanas dari dunia hiburan tanah air.</p></div><div class="max-w-5xl mx-auto px-4 pb-12"><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">{grid_html}</div>{paginasi_html}</div><footer class="bg-gray-800 text-white text-center py-6"><p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>{histats_html}</footer><script src="https://pl31470708.profitableratecpmnetwork.com/6f/e7/76/6fe776724aa6c362b50373f1a2c3d422.js"></script></body></html>'
+        with open("index.html" if page == 1 else f"page-{page}.html", "w", encoding="utf-8") as f: f.write(html_template)
 
 def buat_sitemap_xml(semua_artikel):
     xml_content = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://lensaterkini.my.id/</loc>\n    <lastmod>{datetime.now().strftime("%Y-%m-%d")}</lastmod>\n  </url>\n'
@@ -229,71 +237,13 @@ def buat_sitemap_xml(semua_artikel):
 
 def buat_sistem_pencarian(semua_artikel):
     with open("search.json", "w", encoding="utf-8") as f: json.dump(semua_artikel, f)
-    
     histats_html = get_histats_code()
-    html_search = f"""<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pencarian - LensaTerkini</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 font-sans antialiased">
-    <nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50">
-        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a>
-            <form action="/search.html" method="GET" class="flex w-full sm:w-auto">
-                <input type="text" name="q" id="searchInputTop" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500">
-                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button>
-            </form>
-        </div>
-    </nav>
-    <div class="max-w-5xl mx-auto px-4 py-8 min-h-screen">
-        <h1 class="text-2xl font-bold mb-6">Hasil Pencarian: <span id="keywordDisplay" class="text-red-600">...</span></h1>
-        <div id="searchResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <p class="text-gray-500 col-span-full">Memuat hasil pencarian...</p>
-        </div>
-    </div>
-    <footer class="bg-gray-800 text-white text-center py-6">
-        <p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>
-        {histats_html}
-    </footer>
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const query = urlParams.get('q');
-        const gambarCadangan = "{GAMBAR_CADANGAN}";
-        
-        if(query) {{
-            document.getElementById('keywordDisplay').innerText = '"' + query + '"';
-            document.getElementById('searchInputTop').value = query;
-            fetch('/search.json').then(response => response.json()).then(data => {{
-                const results = data.filter(item => item.judul.toLowerCase().includes(query.toLowerCase()));
-                const resultsContainer = document.getElementById('searchResults');
-                resultsContainer.innerHTML = '';
-                if(results.length > 0) {{
-                    results.forEach(item => {{
-                        resultsContainer.innerHTML += `
-                        <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl flex flex-col">
-                            <a href="/${{item.slug}}.html"><img src="${{item.gambar}}" onerror="this.onerror=null;this.src='${{gambarCadangan}}';" class="w-full h-48 object-cover"></a>
-                            <div class="p-5 flex flex-col flex-grow">
-                                <a href="/${{item.slug}}.html" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${{item.judul}}</a>
-                                <div class="mt-auto"><a href="/${{item.slug}}.html" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a></div>
-                            </div>
-                        </div>`;
-                    }});
-                }} else {{
-                    resultsContainer.innerHTML = '<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan.</p>';
-                }}
-            }});
-        }}
-    </script>
-</body>
-</html>"""
+    html_search = f'<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Pencarian - LensaTerkini</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 font-sans antialiased"><nav class="bg-white shadow-md border-b-4 border-red-600 sticky top-0 z-50"><div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4"><a href="/" class="text-2xl font-extrabold text-red-600 tracking-tighter">LENSA<span class="text-gray-800">TERKINI</span></a><form action="/search.html" method="GET" class="flex w-full sm:w-auto"><input type="text" name="q" id="searchInputTop" placeholder="Cari gosip..." class="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:border-red-500"><button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700">Cari</button></form></div></nav><div class="max-w-5xl mx-auto px-4 py-8 min-h-screen"><h1 class="text-2xl font-bold mb-6">Hasil Pencarian: <span id="keywordDisplay" class="text-red-600">...</span></h1><div id="searchResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"><p class="text-gray-500 col-span-full">Memuat hasil pencarian...</p></div></div><footer class="bg-gray-800 text-white text-center py-6"><p class="text-sm text-gray-400">&copy; 2026 LensaTerkini Network.</p>{histats_html}</footer><script>const urlParams = new URLSearchParams(window.location.search); const query = urlParams.get("q"); const gambarCadangan = "{GAMBAR_CADANGAN}"; if(query) {{ document.getElementById("keywordDisplay").innerText = \'"\' + query + \'"\'; document.getElementById("searchInputTop").value = query; fetch("/search.json").then(response => response.json()).then(data => {{ const results = data.filter(item => item.judul.toLowerCase().includes(query.toLowerCase())); const resultsContainer = document.getElementById("searchResults"); resultsContainer.innerHTML = ""; if(results.length > 0) {{ results.forEach(item => {{ resultsContainer.innerHTML += `<div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl flex flex-col"><a href="/${{item.slug}}.html"><img src="${{item.gambar}}" onerror="this.onerror=null;this.src=\'${{gambarCadangan}}\';" class="w-full h-48 object-cover"></a><div class="p-5 flex flex-col flex-grow"><a href="/${{item.slug}}.html" class="text-lg font-bold text-gray-800 hover:text-red-600 mb-4">${{item.judul}}</a><div class="mt-auto"><a href="/${{item.slug}}.html" class="inline-block bg-red-50 text-red-600 text-sm font-semibold px-4 py-2 rounded-full">Baca &rarr;</a></div></div></div>`; }}); }} else {{ resultsContainer.innerHTML = \'<p class="text-gray-500 col-span-full font-semibold">Maaf, berita tidak ditemukan.</p>\'; }} }}); }}</script></body></html>'
     with open("search.html", "w", encoding="utf-8") as f: f.write(html_search)
 
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
+    import google.auth
     artikel_lama = []
     if os.path.exists("search.json"):
         try:
@@ -301,19 +251,6 @@ def jalankan_bot():
                 data_lama = json.load(f)
                 artikel_lama = [i for i in data_lama if not i["slug"].startswith("google")]
         except: pass
-            
-    if not artikel_lama:
-        for filepath in glob.glob("*.html"):
-            filename = os.path.basename(filepath)
-            if filename in ["index.html", "sitemap.xml", "search.html"] or filename.startswith("page-") or filename.startswith("google"): continue
-            slug = filename.replace('.html', '')
-            try:
-                with open(filepath, "r", encoding="utf-8") as f_html:
-                    isi = f_html.read()
-                    jdl = re.search(r'<title>(.*?)</title>', isi)
-                    gmb = re.search(r'<img src="(.*?)"', isi)
-                    if jdl: artikel_lama.append({"judul": jdl.group(1), "slug": slug, "gambar": gmb.group(1) if gmb else GAMBAR_CADANGAN, "timestamp": os.path.getmtime(filepath)})
-            except: pass
 
     artikel_baru = []
     random.shuffle(RSS_URLS)
@@ -338,19 +275,19 @@ def jalankan_bot():
                         artikel_baru.append({"judul": judul_baru, "slug": slug, "gambar": gambar, "timestamp": int(time.time())})
                         total_artikel_dibuat += 1
                         
-                        print("    -> [SISTEM] Jeda 15 detik sebelum artikel berikutnya...")
+                        # FITUR AUTO-PING KE GOOGLE INDEXING API
+                        url_artikel_baru = f"https://lensaterkini.my.id/{slug}.html"
+                        ping_google_indexing(url_artikel_baru)
+                        
                         time.sleep(15)
         except Exception as e: print(f"[-] Gagal RSS {rss}: {e}")
 
     semua_artikel = sorted(artikel_baru + [i for i in artikel_lama if i["slug"] not in [a["slug"] for a in artikel_baru]], key=lambda x: x.get("timestamp", 0), reverse=True)
     
-    print(f"\n=== TOTAL ARTIKEL: {len(semua_artikel)} ===")
     if len(semua_artikel) > 0:
         buat_index_html(semua_artikel)
         buat_sitemap_xml(semua_artikel) 
         buat_sistem_pencarian(semua_artikel)
-    else:
-        print("[!] PERINGATAN: Tidak ada artikel yang berhasil dibuat. Index.html mungkin akan kosong.")
 
 if __name__ == "__main__":
     jalankan_bot()
