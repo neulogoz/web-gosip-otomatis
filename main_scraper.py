@@ -10,6 +10,7 @@ import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
+import google.auth.transport.requests
 from google.oauth2 import service_account
 import requests
 
@@ -35,7 +36,6 @@ def ping_google_indexing(url_artikel):
             scopes=['https://www.googleapis.com/auth/indexing']
         )
         
-        # Buat token OAuth2 baru
         auth_req = google.auth.transport.requests.Request()
         credentials.refresh(auth_req)
         
@@ -243,7 +243,6 @@ def buat_sistem_pencarian(semua_artikel):
 
 def jalankan_bot():
     print(f"=== MEMULAI BOT PADA {datetime.now()} ===")
-    import google.auth
     artikel_lama = []
     if os.path.exists("search.json"):
         try:
